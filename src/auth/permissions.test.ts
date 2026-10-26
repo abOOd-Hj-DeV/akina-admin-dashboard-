@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { access, canView, homeFor, MATRIX } from './permissions'
+import { access, canView, homeFor } from './permissions'
 import type { Role, Screen } from '../types'
 
 const roles: Role[] = ['super_admin', 'admin', 'clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager']
