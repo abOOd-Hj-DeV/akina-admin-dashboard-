@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Tajawal", ui-sans-serif, system-ui, sans-serif;
+
+  /* Sakina identity (from DESIGN TOKENS page) */
+  --color-primary: #1d919e;
+  --color-primary-2: #4aa7b1;
+  --color-primary-3: #187a85;
+  --color-primary-4: #1d656e;
+  --color-tint-1: #72bbc3;
+  --color-tint-2: #abd6db;
+  --color-tint-3: #c7e4e7;
+  --color-danger: #fd4438;
+  --color-bg: #f7f7f7;
+  --color-card: #ffffff;
+  --color-ink: #1f1f21;
+
+  --shadow-card: 0 1px 3px rgb(16 24 40 / 0.06), 0 1px 2px rgb(16 24 40 / 0.04);
+}
+
+html {
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+body {
+  margin: 0;
+}
+
+.auth-gradient {
+  background: linear-gradient(180deg, #1ca3b2 0%, #8fd0c8 55%, #d8efe9 100%);
+}
