@@ -1,6 +1,7 @@
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { redFlags } from '../data/mock'
+import { listRedFlags } from '../services/data'
+import { useAsync } from '../hooks/useAsync'
 import { Badge, Banner, Btn, Card, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 
@@ -8,6 +9,7 @@ import Icon from '../components/Icon'
 export default function Clinical() {
   const { role } = useAuth()
   const a = role ? access(role, 'clinical') : { level: 'denied' as const }
+  const { data: redFlags = [] } = useAsync(listRedFlags)
   const full = a.level === 'full'
   const critical = redFlags.filter((r) => r.level === 'حرج' || r.level === 'عالي')
 
@@ -17,7 +19,7 @@ export default function Clinical() {
         title="الإشراف الإكلينيكي"
         sub={!full ? 'عرض للقراءة فقط' : 'مراجعة الحالات المحالة والخطط العلاجية — بيانات بدون هوية حسب السياسة'}
       />
-      {critical.length > 0 && <Banner tone="red">🚨 هناك {critical.length} حالة حرجة تحتاج تدخلاً فورياً</Banner>}
+      {critical.length > 0 && <Banner tone="red"><Icon name="warn" size={14} className="ms-1 inline" /> هناك {critical.length} حالة حرجة تحتاج تدخلاً فورياً</Banner>}
 
       <div className="space-y-4">
         {redFlags.map((f) => (

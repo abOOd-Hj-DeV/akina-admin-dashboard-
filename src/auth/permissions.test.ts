@@ -3,7 +3,7 @@ import { access, canView, homeFor } from './permissions'
 import type { Role, Screen } from '../types'
 
 const roles: Role[] = ['super_admin', 'admin', 'clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager']
-const screens: Screen[] = ['dashboard', 'patients', 'patient-profile', 'therapists', 'clinical', 'payments', 'programs', 'doc-requests', 'red-flags', 'reports', 'audit', 'settings', 'tickets']
+const screens: Screen[] = ['dashboard', 'patients', 'patient-profile', 'therapists', 'clinical', 'payments', 'programs', 'doc-requests', 'red-flags', 'reports', 'audit', 'settings', 'tickets', 'faqs', 'users']
 
 describe('مصفوفة الصلاحيات', () => {
   it('كل دور يملك تعريفاً وكل شاشة لها مستوى صالح', () => {
@@ -36,7 +36,13 @@ describe('مصفوفة الصلاحيات', () => {
     expect(access('support_agent', 'tickets').level).toBe('full')
     expect(access('content_manager', 'patients').level).toBe('denied')
     expect(access('content_manager', 'dashboard').level).toBe('denied')
-    expect(canView('content_manager', 'programs')).toBe(true)
+    expect(canView('content_manager', 'faqs')).toBe(true)
+    // حسب عقد الـAPI: البرامج ممنوعة على مدير المحتوى، والدعم ممنوع من المرضى/الملفات/المعالجين
+    expect(access('content_manager', 'programs').level).toBe('denied')
+    expect(access('support_agent', 'patients').level).toBe('denied')
+    expect(access('support_agent', 'doc-requests').level).toBe('denied')
+    expect(access('clinical_supervisor', 'therapists').level).toBe('denied')
+    expect(access('clinical_supervisor', 'doc-requests').level).toBe('denied')
   })
   it('وجهة الدخول لكل دور شاشة مسموحة', () => {
     for (const r of roles) expect(canView(r, homeFor(r))).toBe(true)

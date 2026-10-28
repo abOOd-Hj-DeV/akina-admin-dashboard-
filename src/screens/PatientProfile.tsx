@@ -2,7 +2,8 @@ import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { patients, redFlags, therapists } from '../data/mock'
+import { listPatients, listRedFlags, listTherapists } from '../services/data'
+import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, PageHeader, ProgressBar } from '../components/ui'
 import Icon from '../components/Icon'
 
@@ -25,12 +26,16 @@ const sessions = [
 export default function PatientProfile() {
   const { role } = useAuth()
   const [params] = useSearchParams()
+  const { data: patients = [] } = useAsync(listPatients)
+  const { data: redFlags = [] } = useAsync(listRedFlags)
+  const { data: therapists = [] } = useAsync(listTherapists)
   const p = patients.find((x) => x.id === params.get('id')) ?? patients[2]
   const a = role ? access(role, 'patient-profile') : { level: 'denied' as const }
   const anon = a.mask === 'no-identity'
   const limited = a.mask === 'no-clinical'
   const full = a.level === 'full'
   const [tab, setTab] = useState(0)
+  if (!p) return <div className="py-16 text-center text-[14px] text-[#6b7280]">جارٍ التحميل…</div>
 
   const tabs = TABS.filter((t) => !(limited && CLINICAL_TABS.has(t)))
   const flags = redFlags.filter((r) => r.patientId === p.id)

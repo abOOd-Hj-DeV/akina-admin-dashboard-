@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { tickets } from '../data/mock'
+import { listTickets, setTicketStatus } from '../services/data'
+import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, PageHeader, SearchBar, Table } from '../components/ui'
 import Icon from '../components/Icon'
 
@@ -10,7 +11,12 @@ export default function Tickets() {
   const { role } = useAuth()
   const a = role ? access(role, 'tickets') : { level: 'denied' as const }
   const canProcess = a.level === 'full'
+  const { data: tickets = [] } = useAsync(listTickets)
   const [closed, setClosed] = useState<Record<string, boolean>>({})
+  const close = (id: string) => {
+    setClosed((c) => ({ ...c, [id]: true }))
+    void setTicketStatus(id, 'closed').catch(() => {})
+  }
 
   return (
     <>
@@ -37,7 +43,7 @@ export default function Tickets() {
                     <div className="flex gap-1.5">
                       <Btn tone="ghost" className="px-3 py-1.5 text-[12px]">فتح</Btn>
                       {canProcess && st !== 'مغلقة' && (
-                        <Btn tone="outline" className="px-3 py-1.5 text-[12px]" onClick={() => setClosed({ ...closed, [t.id]: true })}>
+                        <Btn tone="outline" className="px-3 py-1.5 text-[12px]" onClick={() => close(t.id)}>
                           إغلاق
                         </Btn>
                       )}

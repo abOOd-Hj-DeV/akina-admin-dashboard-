@@ -1,15 +1,18 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { patients, therapists } from '../data/mock'
+import { listPatients, listTherapists } from '../services/data'
+import { useAsync } from '../hooks/useAsync'
 import { Badge, Card, Chip, PageHeader, ProgressBar, SearchBar, Table } from '../components/ui'
 import Icon from '../components/Icon'
 
-const tName = (id: string) => therapists.find((t) => t.id === id)?.name ?? '—'
+const tName = (ts: { id: string; name: string }[], id: string) => ts.find((t) => t.id === id || t.name === id)?.name ?? (id.startsWith('د.') ? id : '—')
 const statusTone = (s: string) => (s === 'نشط' ? 'green' : s === 'في خطر' ? 'red' : s === 'مجمّد' ? 'gray' : 'amber') as 'green' | 'red' | 'gray' | 'amber'
 
 export default function Patients() {
   const { role } = useAuth()
+  const { data: patients = [] } = useAsync(listPatients)
+  const { data: therapists = [] } = useAsync(listTherapists)
   const a = role ? access(role, 'patients') : { level: 'denied' as const }
   const hideClinical = a.mask === 'no-clinical' || a.mask === 'status-only'
   const anon = a.mask === 'no-identity'
@@ -49,7 +52,7 @@ export default function Patients() {
                 )}
                 {!statusOnly && !hideClinical && (
                   <>
-                    <td className="px-3 py-3 text-[#6b7280]">{tName(p.therapistId)}</td>
+                    <td className="px-3 py-3 text-[#6b7280]">{tName(therapists, p.therapistId)}</td>
                     <td className="px-3 py-3"><Badge tone={statusTone(p.status)}>{p.status}</Badge></td>
                     <td className="px-3 py-3 text-[#6b7280]">{p.subscription}</td>
                     <td className="px-3 py-3"><ProgressBar value={p.progress} /></td>
@@ -58,7 +61,7 @@ export default function Patients() {
                 )}
                 {hideClinical && !statusOnly && (
                   <>
-                    <td className="px-3 py-3 text-[#6b7280]">{tName(p.therapistId)}</td>
+                    <td className="px-3 py-3 text-[#6b7280]">{tName(therapists, p.therapistId)}</td>
                     <td className="px-3 py-3"><Badge tone={statusTone(p.status)}>{p.status}</Badge></td>
                     <td className="px-3 py-3 text-[#6b7280]">{p.subscription}</td>
                     <td className="px-3 py-3 text-[#6b7280]">{p.lastActivity}</td>

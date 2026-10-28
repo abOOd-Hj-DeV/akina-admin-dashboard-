@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { docRequests } from '../data/mock'
+import { listDocRequests, reviewDocument } from '../services/data'
+import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 
@@ -11,7 +12,12 @@ export default function DocRequests() {
   const a = role ? access(role, 'doc-requests') : { level: 'denied' as const }
   const canAct = a.level === 'full'
   const escalate = a.mask === 'escalate'
+  const { data: docRequests = [] } = useAsync(listDocRequests)
   const [done, setDone] = useState<Record<string, string>>({})
+  const act = (id: string, label: string, action?: 'approve' | 'reject') => {
+    setDone((d) => ({ ...d, [id]: label }))
+    if (action) void reviewDocument(id, action).catch(() => {})
+  }
 
   return (
     <>
@@ -34,12 +40,12 @@ export default function DocRequests() {
                 <Btn tone="ghost" className="px-3 py-1.5 text-[12px]">عرض الملف</Btn>
                 {canAct && st === 'قيد المراجعة' && (
                   <>
-                    <Btn tone="green" className="px-3 py-1.5 text-[12px]" onClick={() => setDone({ ...done, [d.id]: 'مقبول' })}>قبول</Btn>
-                    <Btn tone="danger-soft" className="px-3 py-1.5 text-[12px]" onClick={() => setDone({ ...done, [d.id]: 'مرفوض' })}>رفض</Btn>
+                    <Btn tone="green" className="px-3 py-1.5 text-[12px]" onClick={() => act(d.id, 'مقبول', 'approve')}>قبول</Btn>
+                    <Btn tone="danger-soft" className="px-3 py-1.5 text-[12px]" onClick={() => act(d.id, 'مرفوض', 'reject')}>رفض</Btn>
                   </>
                 )}
                 {escalate && st === 'قيد المراجعة' && (
-                  <Btn tone="outline" className="px-3 py-1.5 text-[12px]" onClick={() => setDone({ ...done, [d.id]: 'مُرحّل للمدير' })}>
+                  <Btn tone="outline" className="px-3 py-1.5 text-[12px]" onClick={() => act(d.id, 'مُرحّل للمدير')}>
                     رفع للمدير
                   </Btn>
                 )}

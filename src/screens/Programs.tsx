@@ -1,12 +1,14 @@
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { programs } from '../data/mock'
+import { listPrograms } from '../services/data'
+import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, PageHeader } from '../components/ui'
 
 /** مكتبة البرامج: المشرف+الرئيسي كامل، Admin قراءة، مدير المحتوى = المحتوى غير العلاجي فقط */
 export default function Programs() {
   const { role } = useAuth()
   const a = role ? access(role, 'programs') : { level: 'denied' as const }
+  const { data: programs = [] } = useAsync(listPrograms)
   const nonTher = a.mask === 'non-therapeutic'
   const readOnly = a.level === 'read'
   const list = nonTher ? programs.filter((p) => !p.therapeutic) : programs

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from './Icon'
 
-export function PageHeader({ title, sub, back }: { title: string; sub?: ReactNode; back?: boolean }) {
+export function PageHeader({ title, sub, back, action }: { title: string; sub?: ReactNode; back?: boolean; action?: ReactNode }) {
   return (
     <div className="mb-6 flex items-start justify-between">
       <div>
@@ -14,6 +14,7 @@ export function PageHeader({ title, sub, back }: { title: string; sub?: ReactNod
         </h1>
         {sub && <div className="mt-1 text-[14px] font-normal text-[#6b7280]">{sub}</div>}
       </div>
+      {action}
     </div>
   )
 }

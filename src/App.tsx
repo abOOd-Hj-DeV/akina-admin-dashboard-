@@ -17,6 +17,8 @@ import Reports from './screens/Reports'
 import Audit from './screens/Audit'
 import Settings from './screens/Settings'
 import Tickets from './screens/Tickets'
+import Faqs from './screens/Faqs'
+import Users from './screens/Users'
 import type { Screen } from './types'
 
 const ROUTES: { screen: Screen; el: ReactElement }[] = [
@@ -33,6 +35,8 @@ const ROUTES: { screen: Screen; el: ReactElement }[] = [
   { screen: 'audit', el: <Audit /> },
   { screen: 'settings', el: <Settings /> },
   { screen: 'tickets', el: <Tickets /> },
+  { screen: 'faqs', el: <Faqs /> },
+  { screen: 'users', el: <Users /> },
 ]
 
 export default function App() {

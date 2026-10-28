@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { payments as all } from '../data/mock'
+import { listPayments, reviewPayment } from '../services/data'
+import { useAsync } from '../hooks/useAsync'
 import { Badge, Banner, Btn, Card, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 
@@ -10,8 +11,13 @@ export default function Payments() {
   const { role } = useAuth()
   const a = role ? access(role, 'payments') : { level: 'denied' as const }
   const ownOnly = a.mask === 'own'
+  const { data: all = [] } = useAsync(listPayments)
   const list = ownOnly ? all.filter((p) => p.partner) : all
   const [done, setDone] = useState<Record<string, 'approved' | 'rejected'>>({})
+  const act = (id: string, action: 'approve' | 'reject') => {
+    setDone((d) => ({ ...d, [id]: action === 'approve' ? 'approved' : 'rejected' }))
+    void reviewPayment(id, action, action === 'reject' ? 'صورة غير واضحة' : undefined).catch(() => {})
+  }
   const canAct = a.level === 'full' || ownOnly
 
   const pending = list.filter((p) => p.status !== 'تمت الموافقة' && p.status !== 'مرفوض' && !done[p.id])
@@ -22,7 +28,7 @@ export default function Payments() {
         title="مراجعة الحوالات"
         sub={ownOnly ? 'عرض حوالاتك المرتبطة بشراكتك فقط' : undefined}
       />
-      <Banner tone="amber">⏱ متوسط وقت التحقق: 12 ساعة — {ownOnly ? pending.length : 24} حوالة بانتظار المراجعة</Banner>
+      <Banner tone="amber"><Icon name="clock" size={14} className="ms-1 inline" /> متوسط وقت التحقق: 12 ساعة — {ownOnly ? pending.length : 24} حوالة بانتظار المراجعة</Banner>
 
       <div className="space-y-4">
         {list.map((p) => {
@@ -41,15 +47,15 @@ export default function Payments() {
                   <span className="font-bold text-[#1d656e]">{p.amount} SR</span>
                   <span>{p.plan}</span>
                   <span>{p.date}</span>
-                  <button className="font-medium text-[#1d919e]">📎 {p.receipt} — عرض</button>
+                  <button className="font-medium text-[#1d919e]"><Icon name="doc" size={14} className="inline" /> {p.receipt} — عرض</button>
                 </div>
               </div>
               {canAct && !state && p.status !== 'تمت الموافقة' && p.status !== 'مرفوض' && (
                 <div className="flex gap-2">
-                  <Btn tone="green" onClick={() => setDone({ ...done, [p.id]: 'approved' })} className="px-3 py-2 text-[12px]">
+                  <Btn tone="green" onClick={() => act(p.id, 'approve')} className="px-3 py-2 text-[12px]">
                     الموافقة وتفعيل الاشتراك
                   </Btn>
-                  <Btn tone="danger-soft" onClick={() => setDone({ ...done, [p.id]: 'rejected' })} className="px-3 py-2 text-[12px]">
+                  <Btn tone="danger-soft" onClick={() => act(p.id, 'reject')} className="px-3 py-2 text-[12px]">
                     رفض (صورة غير واضحة)
                   </Btn>
                 </div>

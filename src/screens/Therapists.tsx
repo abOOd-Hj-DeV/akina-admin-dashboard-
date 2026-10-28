@@ -1,10 +1,12 @@
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { therapists } from '../data/mock'
+import { listTherapists } from '../services/data'
+import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, PageHeader, SearchBar, Table } from '../components/ui'
 
 export default function Therapists() {
   const { role } = useAuth()
+  const { data: therapists = [] } = useAsync(listTherapists)
   const a = role ? access(role, 'therapists') : { level: 'denied' as const }
   const readOnly = a.level === 'read'
   const opsOnly = a.mask === 'ops' // admin: تشغيل — بدون قرارات الاعتماد السريرية؟ نقول: تعطيل/تعليق مسموح، اعتماد للمدير الرئيسي
