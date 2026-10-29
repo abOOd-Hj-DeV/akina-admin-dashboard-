@@ -12,8 +12,8 @@ function Unauthorized() {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
       <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-purple-50 text-4xl"><Icon name="shield" size={40} className="text-purple-400" /></div>
-      <h2 className="text-[24px] font-bold text-[#1f1f21]">غير مصرح</h2>
-      <p className="mt-2 max-w-md text-[14px] text-[#6b7280]">
+      <h2 className="text-[24px] font-bold text-[#0a0a0a]">غير مصرح</h2>
+      <p className="mt-2 max-w-md text-[14px] text-[#657381]">
         هذه الصفحة غير متاحة لصلاحية دورك الحالي.
       </p>
       <Link to={`/${role ? homeFor(role) : 'login'}`}>

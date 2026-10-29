@@ -67,16 +67,18 @@ export default function Login() {
   }, 'تعذّر إعادة الإرسال')
 
   return (
-    <div className="auth-gradient flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-lg rounded-3xl bg-white p-8 shadow-xl">
-        <div className="mb-1 flex items-center gap-2">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#1d919e] text-xl text-white font-bold">س</div>
+    <div className="auth-page">
+      <div className="relative w-full max-w-lg rounded-3xl border border-white/70 bg-white/80 p-8 shadow-xl backdrop-blur-md">
+        <div className="mb-1 flex items-center gap-3">
+          <span className="brand-symbol brand-symbol-lg">
+            <img src="/assets/auth-imgRectangle6.png" alt="" aria-hidden />
+          </span>
           <div>
-            <h1 className="text-[24px] font-bold text-[#1f1f21]">لوحة إدارة سكينة</h1>
-            <p className="text-[12px] text-[#6b7280]">Mental Health Therapy Platform</p>
+            <h1 className="font-['IBM_Plex_Sans_Arabic'] text-[24px] font-semibold text-[#0a0a0a]">لوحة إدارة سكينة</h1>
+            <p className="text-[12px] text-[#657381]">Mental Health Therapy Platform</p>
           </div>
         </div>
-        <p className="mt-4 rounded-xl bg-[#c7e4e7]/50 px-4 py-2.5 text-[12px] font-medium text-[#1d656e]">
+        <p className="mt-4 rounded-xl bg-[#c7e4e7]/50 px-4 py-2.5 text-[12px] font-medium text-[#135e66]">
           <Icon name="lock" size={14} className="ms-1 inline" /> منطقة مقيدة — جميع محاولات الدخول مسجلة وتخضع للمراجعة (رمز تحقق عبر واتساب)
         </p>
         {otpStep ? (
@@ -84,25 +86,25 @@ export default function Login() {
             <input
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-center text-[18px] tracking-[0.5em] outline-none focus:border-[#1d919e]"
+              className="w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-center text-[18px] tracking-[0.5em] outline-none focus:border-[#1d919e]"
               placeholder="000000"
               inputMode="numeric"
               autoComplete="one-time-code"
               aria-label="رمز التحقق"
               dir="ltr"
             />
-            {info && <p className="rounded-xl bg-[#c7e4e7]/50 px-4 py-2 text-[12px] font-medium text-[#1d656e]">{info}</p>}
+            {info && <p className="rounded-xl bg-[#c7e4e7]/50 px-4 py-2 text-[12px] font-medium text-[#135e66]">{info}</p>}
             {err && <p className="rounded-xl bg-red-50 px-4 py-2 text-[12px] font-medium text-[#fd4438]">{err}</p>}
             <button
               type="submit"
               disabled={busy || otp.length !== 6}
-              className="w-full rounded-xl bg-[#1d919e] py-3 text-[14px] font-bold text-white transition hover:bg-[#187a85] disabled:opacity-50"
+              className="teal-button w-full"
             >
               {busy ? 'جارٍ التحقق…' : 'تأكيد الرمز'}
             </button>
             <div className="flex items-center justify-between text-[12px]">
               <button type="button" disabled={busy} onClick={() => void resend()} className="font-medium text-[#1d919e] disabled:opacity-50">إعادة إرسال الرمز</button>
-              <button type="button" onClick={() => { setOtpStep(false); setErr(''); setInfo('') }} className="text-[#6b7280]">رجوع</button>
+              <button type="button" onClick={() => { setOtpStep(false); setErr(''); setInfo('') }} className="text-[#657381]">رجوع</button>
             </div>
           </form>
         ) : (
@@ -113,7 +115,7 @@ export default function Login() {
             <input
               value={wa}
               onChange={(e) => setWa(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-[14px] outline-none focus:border-[#1d919e]"
+              className="w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-[14px] outline-none focus:border-[#1d919e]"
               placeholder={API_MOCK ? 'رقم الواتساب الإداري (مثال: +963900000777)' : 'رقم الواتساب الإداري'}
               dir="ltr"
             />
@@ -121,7 +123,7 @@ export default function Login() {
               type="password"
               value={pw}
               onChange={(e) => setPw(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-[14px] outline-none focus:border-[#1d919e]"
+              className="w-full rounded-xl border border-[#ebebeb] px-4 py-3 text-[14px] outline-none focus:border-[#1d919e]"
               placeholder="كلمة المرور"
               dir="ltr"
             />
@@ -130,7 +132,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={busy || !wa || !pw}
-                className="w-full rounded-xl bg-[#1d919e] py-3 text-[14px] font-bold text-white transition hover:bg-[#187a85] disabled:opacity-50"
+                className="teal-button w-full"
               >
                 {busy ? 'جارٍ الدخول…' : 'تسجيل الدخول'}
               </button>
@@ -138,13 +140,13 @@ export default function Login() {
           </form>
         )}
         <div className="mt-4 flex items-center justify-between text-[12px]">
-          <label className="flex items-center gap-1.5 text-[#6b7280]"><input type="checkbox" /> تذكرني</label>
+          <label className="flex items-center gap-1.5 text-[#657381]"><input type="checkbox" /> تذكرني</label>
           {!API_MOCK && <Link to="/activate" className="font-medium text-[#1d919e]">تفعيل حساب جديد</Link>}
           <span className="cursor-pointer font-medium text-[#1d919e]">استعادة كلمة المرور</span>
         </div>
         {API_MOCK && (
           <>
-            <p className="mt-5 text-center text-[12px] font-medium text-[#6b7280]">الدخول التجريبي حسب الدور:</p>
+            <p className="mt-5 text-center text-[12px] font-medium text-[#657381]">الدخول التجريبي حسب الدور:</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {ROLES.map((r) => (
                 <button
@@ -152,8 +154,8 @@ export default function Login() {
                   onClick={() => enter(r.role)}
                   className="rounded-xl border border-[#1d919e]/25 px-3 py-3 text-right transition hover:border-[#1d919e] hover:bg-[#c7e4e7]/30"
                 >
-                  <div className="text-[14px] font-bold text-[#1d656e]">{ROLE_LABELS[r.role]}</div>
-                  <div className="mt-0.5 text-[12px] font-normal text-[#6b7280]">{r.desc}</div>
+                  <div className="text-[14px] font-bold text-[#135e66]">{ROLE_LABELS[r.role]}</div>
+                  <div className="mt-0.5 text-[12px] font-normal text-[#657381]">{r.desc}</div>
                 </button>
               ))}
             </div>

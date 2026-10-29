@@ -35,16 +35,16 @@ export default function Payments() {
           const state = done[p.id]
           return (
             <Card key={p.id} className="flex items-center gap-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#c7e4e7] text-[#1d656e]"><Icon name="receipt" size={22} /></div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#c7e4e7] text-[#135e66]"><Icon name="receipt" size={22} /></div>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[16px] font-bold text-[#1f1f21]">{p.id} — {p.patientName}</span>
+                  <span className="text-[16px] font-bold text-[#0a0a0a]">{p.id} — {p.patientName}</span>
                   <Badge tone={state === 'approved' || p.status === 'تمت الموافقة' ? 'green' : state === 'rejected' || p.status === 'مرفوض' ? 'red' : p.status === 'تحت المراجعة' ? 'blue' : 'amber'}>
                     {state === 'approved' ? 'تمت الموافقة' : state === 'rejected' ? 'مرفوض' : p.status}
                   </Badge>
                 </div>
-                <div className="mt-1 flex gap-4 text-[14px] text-[#6b7280]">
-                  <span className="font-bold text-[#1d656e]">{p.amount} SR</span>
+                <div className="mt-1 flex gap-4 text-[14px] text-[#657381]">
+                  <span className="font-bold text-[#135e66]">{p.amount} SR</span>
                   <span>{p.plan}</span>
                   <span>{p.date}</span>
                   <button className="font-medium text-[#1d919e]"><Icon name="doc" size={14} className="inline" /> {p.receipt} — عرض</button>
@@ -64,7 +64,7 @@ export default function Payments() {
           )
         })}
       </div>
-      <p className="mt-4 text-[12px] text-[#6b7280]">عند الرفض تُرسل ملاحظة للمريض لإعادة رفع الإيصال. كل قرار يُسجل في سجل التدقيق.</p>
+      <p className="mt-4 text-[12px] text-[#657381]">عند الرفض تُرسل ملاحظة للمريض لإعادة رفع الإيصال. كل قرار يُسجل في سجل التدقيق.</p>
     </>
   )
 }

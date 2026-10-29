@@ -37,10 +37,10 @@ export default function Programs() {
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[16px] font-bold text-[#1f1f21]">{p.title}</span>
+                  <span className="text-[16px] font-bold text-[#0a0a0a]">{p.title}</span>
                   <Badge tone={p.kind === 'أساسي' ? 'teal' : p.kind === 'اختياري' ? 'purple' : 'gray'}>{p.kind}</Badge>
                 </div>
-                <div className="mt-1 text-[12px] text-[#6b7280]">
+                <div className="mt-1 text-[12px] text-[#657381]">
                   {p.id} · {p.modules} وحدة · {p.therapeutic ? 'محتوى علاجي' : 'محتوى عام'}
                 </div>
               </div>
@@ -52,7 +52,7 @@ export default function Programs() {
                 <>
                   <Btn tone="outline" className="px-3 py-1.5 text-[12px]">تحرير</Btn>
                   {p.status === 'منشور' ? (
-                    <Btn tone="ghost" className="px-3 py-1.5 text-[12px] text-[#6b7280]">أرشفة</Btn>
+                    <Btn tone="ghost" className="px-3 py-1.5 text-[12px] text-[#657381]">أرشفة</Btn>
                   ) : (
                     <Btn tone="green" className="px-3 py-1.5 text-[12px]">نشر</Btn>
                   )}

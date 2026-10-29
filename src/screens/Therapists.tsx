@@ -20,18 +20,18 @@ export default function Therapists() {
           <Table cols={['الرقم', 'الاسم', 'الحالة', 'المرضى', 'التقييم', 'تاريخ الانضمام', 'إجراءات']}>
             {therapists.map((t) => (
               <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-[#f7f7f7]/60">
-                <td className="px-3 py-3 font-bold text-[#1f1f21]">{t.id}</td>
-                <td className="px-3 py-3 text-[#1f1f21]">{t.name}</td>
+                <td className="px-3 py-3 font-bold text-[#0a0a0a]">{t.id}</td>
+                <td className="px-3 py-3 text-[#0a0a0a]">{t.name}</td>
                 <td className="px-3 py-3">
                   <Badge tone={t.status === 'معتمد' ? 'green' : t.status === 'قيد المراجعة' ? 'amber' : 'red'}>
                     {t.status === 'معتمد' ? '✓ ' : ''}{t.status}
                   </Badge>
                 </td>
-                <td className="px-3 py-3 text-[#6b7280]">{t.patients}</td>
-                <td className="px-3 py-3 text-[#6b7280]">
+                <td className="px-3 py-3 text-[#657381]">{t.patients}</td>
+                <td className="px-3 py-3 text-[#657381]">
                   {t.rating ? `⭐ ${t.rating} (${t.ratingCount})` : 'لا تقييمات'}
                 </td>
-                <td className="px-3 py-3 text-[#6b7280]">{t.joined}</td>
+                <td className="px-3 py-3 text-[#657381]">{t.joined}</td>
                 <td className="px-3 py-3">
                   <div className="flex gap-1.5">
                     <Btn tone="ghost" className="px-3 py-1.5 text-[12px]">عرض</Btn>

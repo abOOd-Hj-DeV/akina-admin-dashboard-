@@ -55,9 +55,9 @@ export default function Users() {
       {adding && (
         <Card className="mb-4 space-y-3">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="الاسم" className="rounded-xl border border-gray-200 px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="البريد الإلكتروني" dir="ltr" className="rounded-xl border border-gray-200 px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
-            <select value={r} onChange={(e) => setR(e.target.value as ApiRole)} className="rounded-xl border border-gray-200 px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]">
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="الاسم" className="rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="البريد الإلكتروني" dir="ltr" className="rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
+            <select value={r} onChange={(e) => setR(e.target.value as ApiRole)} className="rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]">
               {STAFF_ROLES.map((x) => <option key={x} value={x}>{ROLE_LABELS[x]}</option>)}
             </select>
           </div>
@@ -71,11 +71,11 @@ export default function Users() {
         <Table cols={['الاسم', 'البريد', 'الدور', 'الحالة', 'انضم', 'إجراءات']}>
           {users.map((u) => (
             <tr key={u.id} className="border-t border-gray-50">
-              <td className="px-3 py-3 font-medium text-[#1f1f21]">{u.name}</td>
-              <td className="px-3 py-3 text-[#6b7280]" dir="ltr">{u.email}</td>
+              <td className="px-3 py-3 font-medium text-[#0a0a0a]">{u.name}</td>
+              <td className="px-3 py-3 text-[#657381]" dir="ltr">{u.email}</td>
               <td className="px-3 py-3"><Badge tone="purple">{u.role in ROLE_LABELS ? ROLE_LABELS[u.role as Role] : u.role}</Badge></td>
               <td className="px-3 py-3"><Badge tone={u.is_active ? 'green' : 'gray'}>{u.is_active ? 'نشط' : 'معطّل'}</Badge></td>
-              <td className="px-3 py-3 text-[12px] text-[#6b7280]">{u.created_at?.slice(0, 10)}</td>
+              <td className="px-3 py-3 text-[12px] text-[#657381]">{u.created_at?.slice(0, 10)}</td>
               <td className="px-3 py-3">
                 {canEdit && (
                   <div className="flex gap-1.5">

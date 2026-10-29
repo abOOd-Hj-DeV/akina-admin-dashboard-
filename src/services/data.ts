@@ -8,10 +8,10 @@ import { API_MOCK } from '../api/client'
 import { adminApi } from '../api/admin'
 import type {
   ApiAdminPatient, ApiAdminTherapist, ApiAuditEntry, ApiDocument,
-  ApiFaq, ApiPayment, ApiRedFlag, ApiSupportTicket, ApiWithdrawal,
+  ApiFaq, ApiOverview, ApiPayment, ApiProgram, ApiRedFlag, ApiSupportTicket, ApiWithdrawal,
 } from '../api/types'
 import type {
-  AuditEntry, DocRequest, Patient, Payment, RedFlag, Therapist, Ticket,
+  AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Therapist, Ticket,
 } from '../types'
 import * as mock from '../data/mock'
 
@@ -126,7 +126,21 @@ export const listDocRequests = () =>
 export const listTickets = () =>
   API_MOCK ? wait(mock.tickets) : adminApi.tickets().then(r => r.data.map(mapTicket))
 
-export const listPrograms = () => wait(mock.programs) // برامج المحتوى العلاجي — تُربط بـ adminApi.programs عند الربط
+const PROGRAM_STATUS = { published: 'منشور', draft: 'مسودة', archived: 'مؤرشف' } as const
+const mapProgram = (p: ApiProgram): Program => ({
+  id: p.id,
+  title: p.title,
+  kind: 'أساسي',
+  modules: p.modules_count ?? 0,
+  therapeutic: true,
+  status: PROGRAM_STATUS[p.status as keyof typeof PROGRAM_STATUS] ?? 'مسودة',
+})
+
+export const listPrograms = () =>
+  API_MOCK ? wait(mock.programs) : adminApi.programs().then(r => r.data.map(mapProgram))
+
+export const getOverview = (): Promise<ApiOverview | null> =>
+  API_MOCK ? wait(null) : adminApi.overview().then(r => r.data)
 
 export const listAudit = () =>
   API_MOCK ? wait(mock.auditLog) : adminApi.audit().then(r => r.data.map(mapAudit))
@@ -137,7 +151,17 @@ export const listFaqs = (): Promise<ApiFaq[]> =>
     { id: 'F-2', question: 'متى تُفعّل الباقة؟', answer: 'بعد مراجعة الإيصال خلال 24 ساعة.' },
   ]) : adminApi.faqs().then(r => r.data)
 
-export const activityFeed = () => wait(mock.activityFeed)
+export interface FeedItem { text: string; by: string; at: string; dot: string }
+
+export const activityFeed = (): Promise<FeedItem[]> =>
+  API_MOCK
+    ? wait(mock.activityFeed)
+    : adminApi.audit().then(r => r.data.slice(0, 8).map(a => ({
+        text: a.action,
+        by: typeof a.actor === 'string' ? a.actor : (a.actor?.name ?? 'النظام'),
+        at: a.occurred_at ?? a.created_at,
+        dot: '#1d919e',
+      })))
 
 /* ---------- العمليات (mutations) ---------- */
 

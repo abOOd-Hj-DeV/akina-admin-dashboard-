@@ -1,4 +1,5 @@
 import { Btn, Card, PageHeader } from '../components/ui'
+import { API_MOCK } from '../api/client'
 
 const SECTIONS = [
   {
@@ -31,15 +32,23 @@ export default function Settings() {
         {SECTIONS.map((s) => (
           <Card key={s.title}>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[16px] font-bold text-[#1f1f21]">{s.title}</h3>
+              <h3 className="text-[16px] font-bold text-[#0a0a0a]">{s.title}</h3>
               <Btn tone="ghost" className="px-3 py-1.5 text-[12px]">تحرير</Btn>
             </div>
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-[#eff0f0]">
               {s.rows.map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between gap-4 py-2.5 text-[14px]">
-                  <span className="font-medium text-[#6b7280]">{k}</span>
-                  <span className="text-left text-[#1f1f21]">{v}</span>
-                </div>
+                /* في الوضع الحي لا نعرض رقم حساب بنكي غير مضبوط من الخادم */
+                (s.title === 'مكاتب الحوالات' && !API_MOCK && v.includes('IBAN')) ? (
+                  <div key={k} className="flex items-center justify-between gap-4 py-2.5 text-[14px]">
+                    <span className="font-medium text-[#657381]">{k}</span>
+                    <span className="text-left text-[#657381]">لم يُضبط بعد</span>
+                  </div>
+                ) : (
+                  <div key={k} className="flex items-center justify-between gap-4 py-2.5 text-[14px]">
+                    <span className="font-medium text-[#657381]">{k}</span>
+                    <span className="text-left text-[#0a0a0a]">{v}</span>
+                  </div>
+                )
               ))}
             </div>
           </Card>
