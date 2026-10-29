@@ -10,6 +10,8 @@ const ADMIN_ROLES = new Set<ApiRole>([
 
 interface AuthState {
   role: Role | null
+  /** اسم المستخدم المعروض في بطاقة الملف الشخصي */
+  userName: string | null
   /** دخول تجريبي (وضع الـmock) */
   login: (role: Role) => void
   /** دخول حقيقي عبر /api/v1/auth/login — يقبل أدوار الإدارة فقط؛ يرجع '2fa' إذا أُرسل رمز تحقق */
@@ -20,7 +22,7 @@ interface AuthState {
 }
 
 const Ctx = createContext<AuthState>({
-  role: null, login: () => {}, apiLogin: async () => 'admin', apiVerify2fa: async () => 'admin', logout: () => {},
+  role: null, userName: null, login: () => {}, apiLogin: async () => 'admin', apiVerify2fa: async () => 'admin', logout: () => {},
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -28,16 +30,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const s = sessionStorage.getItem('sakina-role')
     return (s as Role) || null
   })
+  const [userName, setUserName] = useState<string | null>(() => sessionStorage.getItem('sakina-user-name'))
 
   // 401 من أي استدعاء API → إنهاء الجلسة
   useEffect(() => {
-    const onUnauth = () => setRole(null)
+    const onUnauth = () => { setRole(null); setUserName(null) }
     window.addEventListener('sakina:unauthenticated', onUnauth)
     return () => window.removeEventListener('sakina:unauthenticated', onUnauth)
   }, [])
 
   const login = (r: Role) => {
     sessionStorage.setItem('sakina-role', r)
+    sessionStorage.removeItem('sakina-user-name')
+    setUserName(null)
     setRole(r)
   }
 
@@ -48,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const r = res.user.role as Role
     sessionStorage.setItem('sakina-role', r)
+    sessionStorage.setItem('sakina-user-name', res.user.name)
+    setUserName(res.user.name)
     setRole(r)
     return r
   }
@@ -63,10 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     sessionStorage.removeItem('sakina-role')
+    sessionStorage.removeItem('sakina-user-name')
     void logoutApi().catch(() => tokenStore.clear())
+    setUserName(null)
     setRole(null)
   }
-  return <Ctx.Provider value={{ role, login, apiLogin, apiVerify2fa, logout }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ role, userName, login, apiLogin, apiVerify2fa, logout }}>{children}</Ctx.Provider>
 }
 
 export const useAuth = () => useContext(Ctx)

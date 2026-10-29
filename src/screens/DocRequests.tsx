@@ -27,14 +27,14 @@ export default function DocRequests() {
           const st = done[d.id] ?? d.status
           return (
             <Card key={d.id} className="flex items-start gap-4">
-              <span className="mt-1 text-[#1d656e]"><Icon name="file" size={20} /></span>
+              <span className="mt-1 text-[#135e66]"><Icon name="file" size={20} /></span>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-[16px] font-bold text-[#1f1f21]">{d.id} — {d.subject}</span>
+                  <span className="text-[16px] font-bold text-[#0a0a0a]">{d.id} — {d.subject}</span>
                   <Badge tone={st === 'مقبول' ? 'green' : st === 'مرفوض' ? 'red' : st === 'مُرحّل للمدير' ? 'blue' : 'amber'}>{st}</Badge>
                 </div>
-                <p className="mt-1 text-[14px] text-[#6b7280]">السبب: {d.reason}</p>
-                <p className="mt-1 text-[12px] text-[#6b7280]">مقدم الطلب: {d.requestedBy} · {d.date}</p>
+                <p className="mt-1 text-[14px] text-[#657381]">السبب: {d.reason}</p>
+                <p className="mt-1 text-[12px] text-[#657381]">مقدم الطلب: {d.requestedBy} · {d.date}</p>
               </div>
               <div className="flex gap-2">
                 <Btn tone="ghost" className="px-3 py-1.5 text-[12px]">عرض الملف</Btn>

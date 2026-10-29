@@ -1,69 +1,171 @@
-import { Navigate, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { canView, NAV, ROLE_LABELS } from '../auth/permissions'
+import { API_MOCK } from '../api/client'
+import { adminApi } from '../api/admin'
 import Icon from './Icon'
 
+const TITLE_FOR: Record<string, string> = { 'patient-profile': 'ملف المريض' }
+
+function titleFor(pathname: string) {
+  const seg = pathname.replace(/^\/+/, '').split('/')[0] || 'dashboard'
+  return NAV.find((n) => n.screen === seg)?.label ?? TITLE_FOR[seg] ?? 'لوحة التحكم'
+}
+
 export default function Shell() {
-  const { role, logout } = useAuth()
+  const { role, userName, logout } = useAuth()
   const nav = useNavigate()
+  const { pathname } = useLocation()
+  const [collapsed, setCollapsed] = useState(false)
+  const [mobileNav, setMobileNav] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [notifCount, setNotifCount] = useState(0)
+  const [notifs, setNotifs] = useState<{ title: string; body: string }[]>([])
+  const notifRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { setMobileNav(false); setNotifOpen(false) }, [pathname])
+
+  useEffect(() => {
+    let live = true
+    adminApi.notifications()
+      .then((p) => {
+        if (!live) return
+        const items = (p.data ?? []) as { title?: string; body?: string; message?: string; is_read?: boolean }[]
+        setNotifs(items.slice(0, 8).map((n) => ({ title: n.title ?? 'إشعار', body: n.body ?? n.message ?? '' })))
+        setNotifCount(items.filter((n) => n.is_read === false).length || 0)
+      })
+      .catch(() => {})
+    return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
+  const items = useMemo(() => (role ? NAV.filter((n) => canView(role, n.screen)) : []), [role])
   if (!role) return <Navigate to="/login" replace />
-  const items = NAV.filter((n) => canView(role, n.screen))
+
+  const title = titleFor(pathname)
+
   return (
-    <div className="min-h-screen bg-[#f7f7f7]">
-      {/* الشريط العلوي */}
-      <header className="sticky top-0 z-20 border-b border-gray-100 bg-[#eaf4f5]/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-6 py-3">
-          <span className="text-[12px] font-medium text-[#1d656e]">Mental Health Therapy Platform</span>
-          <nav className="flex gap-1 rounded-xl bg-white p-1 shadow-sm">
-            {['تطبيق المريض', 'تطبيق المعالج', 'لوحة الإدارة'].map((t, i) => (
-              <span
-                key={t}
-                className={`cursor-default rounded-lg px-4 py-1.5 text-[12px] font-bold ${i === 2 ? 'bg-[#1d919e] text-white' : 'text-[#6b7280]'}`}
-              >
-                {t}
-              </span>
-            ))}
-          </nav>
-          <div className="ms-auto flex items-center gap-3">
-            <span className="rounded-lg bg-[#c7e4e7] px-3 py-1.5 text-[12px] font-bold text-[#1d656e]">
-              الدور: {ROLE_LABELS[role]}
+    <div className={`workspace ${collapsed ? 'is-collapsed' : ''}`}>
+      {/* الشريط الجانبي — نفس تخطيط داشبورد المعالج */}
+      <aside className={`sidebar ${mobileNav ? 'open' : ''}`}>
+        <header className="sidebar-header">
+          <span className="brand">
+            <span className="brand-symbol">
+              <img src="/assets/part2-03-imgRectangle6.png" alt="" aria-hidden />
             </span>
+            <img className="brand-wordmark" src="/assets/dashboard-imgLabel.png" alt="سكينة" />
+          </span>
+          <button
+            type="button"
+            className="collapse-button"
+            onClick={() => setCollapsed((v) => !v)}
+            aria-label={collapsed ? 'توسيع القائمة' : 'طي القائمة'}
+          >
+            <Icon name="panel" size={18} />
+          </button>
+        </header>
+
+        <nav className="navigation" aria-label="القائمة الرئيسية">
+          <div className="nav-label">القائمة الرئيسية</div>
+          {items.map((n) => (
+            <NavLink key={n.screen} to={`/${n.screen}`} className="nav-item" title={n.label}>
+              <Icon name={n.icon} size={20} />
+              <span className="nav-item-label">{n.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="client-reminder textured">
+            <div className="client-reminder-inner">
+              <strong>منصة سكينة للإدارة</strong>
+              <p>إدارة المرضى والمعالجين والمدفوعات والإشراف من مكان واحد</p>
+              <NavLink to="/dashboard" className="client-reminder-cta">العودة للوحة التحكم</NavLink>
+            </div>
+          </div>
+          <div className="profile-card">
+            <span className="profile-avatar" aria-hidden>{(userName || 'م').trim().charAt(0)}</span>
+            <span className="profile-meta">
+              <strong>{userName || 'مشرف سكينة'}</strong>
+              <small>{ROLE_LABELS[role]}</small>
+            </span>
+            {canView(role, 'settings') && (
+              <NavLink to="/settings" className="profile-gear" aria-label="الإعدادات">
+                <Icon name="gear" size={16} />
+              </NavLink>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {mobileNav && <button type="button" className="sidebar-scrim" aria-label="إغلاق القائمة" onClick={() => setMobileNav(false)} />}
+
+      <main className="workspace-main">
+        {/* الشريط العلوي — عنوان الصفحة + بحث + إشعارات + خروج */}
+        <div className="secondary-topbar">
+          <div className="topbar-start">
+            <button type="button" className="icon-button mobile-menu" onClick={() => setMobileNav(true)} aria-label="فتح القائمة">
+              <Icon name="menu" />
+            </button>
+            <h1>{title}</h1>
+            {API_MOCK && <span className="demo-chip">وضع العرض التجريبي</span>}
+          </div>
+          <div className="topbar-actions">
+            <label className="secondary-search">
+              <Icon name="search" size={18} />
+              <input type="search" placeholder="بحث…" aria-label="بحث" />
+            </label>
+            <div className="notif-wrap" ref={notifRef}>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="الإشعارات"
+                aria-expanded={notifOpen}
+                onClick={() => setNotifOpen((v) => !v)}
+              >
+                <Icon name="bell" />
+                {notifCount > 0 && <span className="notif-dot" />}
+              </button>
+              {notifOpen && (
+                <div className="notif-panel" role="dialog" aria-label="الإشعارات">
+                  <header>الإشعارات</header>
+                  {notifs.length === 0 ? (
+                    <p className="notif-empty">لا توجد إشعارات</p>
+                  ) : (
+                    <ul>
+                      {notifs.map((n, i) => (
+                        <li key={i}>
+                          <strong>{n.title}</strong>
+                          {n.body && <p>{n.body}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
             <button
+              type="button"
+              className="icon-button logout-button"
+              aria-label="تسجيل الخروج"
+              title="تسجيل الخروج"
               onClick={() => { logout(); nav('/login') }}
-              className="rounded-lg border border-[#fd4438]/30 px-3 py-1.5 text-[12px] font-bold text-[#fd4438] hover:bg-red-50"
             >
-              تسجيل الخروج
+              <Icon name="logout" />
             </button>
           </div>
         </div>
-      </header>
 
-      <div className="mx-auto flex max-w-7xl gap-6 px-6 py-6">
-        {/* قائمة جانبية حسب الصلاحيات */}
-        <aside className="w-56 shrink-0">
-          <div className="sticky top-20 rounded-2xl bg-white p-3 shadow-sm">
-            <div className="mb-2 px-3 text-[12px] font-medium text-[#6b7280]">شاشات الإدارة</div>
-            {items.map((n) => (
-              <NavLink
-                key={n.screen}
-                to={`/${n.screen}`}
-                className={({ isActive }) =>
-                  `mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2 text-[14px] font-medium transition ${
-                    isActive ? 'bg-[#1d919e] text-white' : 'text-[#1f1f21] hover:bg-[#c7e4e7]/50'
-                  }`
-                }
-              >
-                <Icon name={n.icon} size={18} />
-                {n.label}
-              </NavLink>
-            ))}
-          </div>
-        </aside>
-
-        <main className="min-w-0 flex-1">
-          <Outlet />
-        </main>
-      </div>
+        <Outlet />
+      </main>
     </div>
   )
 }

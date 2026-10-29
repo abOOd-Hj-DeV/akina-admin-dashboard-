@@ -21,7 +21,7 @@ export default function RedFlags() {
         <PageHeader title="تنبيهات التصعيد" sub="وضع الدعم الفني — ترى التنبيه فقط" />
         <Banner tone="red"><Icon name="warn" size={14} className="ms-1 inline" /> {open.length} حالة نشطة في قائمة Red Flags — للمتابعة تواصل مع المشرف الإكلينيكي</Banner>
         <Card>
-          <p className="text-[14px] text-[#6b7280]">
+          <p className="text-[14px] text-[#657381]">
             لا يمكن لموظف الدعم الاطلاع على تفاصيل الحالات السريرية. تم إشعار المشرف الإكلينيكي تلقائياً.
           </p>
           <Btn className="mt-4">إشعار المشرف مرة أخرى</Btn>
@@ -40,11 +40,11 @@ export default function RedFlags() {
             <span className={`mt-1 ${f.level === 'تم الحل' ? 'text-emerald-500' : 'text-red-500'}`}><Icon name={f.level === 'تم الحل' ? 'check' : 'flag'} size={20} /></span>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-[16px] font-bold text-[#1f1f21]">{f.id} — {f.patientName} ({f.patientId})</span>
+                <span className="text-[16px] font-bold text-[#0a0a0a]">{f.id} — {f.patientName} ({f.patientId})</span>
                 <Badge tone={f.level === 'حرج' ? 'red' : f.level === 'عالي' ? 'amber' : f.level === 'تم الحل' ? 'green' : 'blue'}>{f.level}</Badge>
               </div>
-              <p className="mt-1 text-[14px] text-[#6b7280]">{f.reason}</p>
-              <p className="mt-1 text-[12px] text-[#6b7280]">المعالج: {f.therapistName} · {f.detectedAt}</p>
+              <p className="mt-1 text-[14px] text-[#657381]">{f.reason}</p>
+              <p className="mt-1 text-[12px] text-[#657381]">المعالج: {f.therapistName} · {f.detectedAt}</p>
             </div>
             {full && f.level !== 'تم الحل' && (
               <div className="flex flex-col gap-2">

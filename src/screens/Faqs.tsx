@@ -37,8 +37,8 @@ export default function Faqs() {
       />
       {adding && (
         <Card className="mb-4 space-y-3">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="السؤال" className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
-          <textarea value={an} onChange={(e) => setAn(e.target.value)} placeholder="الإجابة" rows={3} className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="السؤال" className="w-full rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
+          <textarea value={an} onChange={(e) => setAn(e.target.value)} placeholder="الإجابة" rows={3} className="w-full rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
           <div className="flex gap-2">
             <Btn tone="green" onClick={() => void add()}>حفظ</Btn>
             <Btn tone="ghost" onClick={() => setAdding(false)}>إلغاء</Btn>
@@ -48,17 +48,17 @@ export default function Faqs() {
       <div className="space-y-3">
         {faqs.map((f) => (
           <Card key={f.id} className="flex items-start gap-4">
-            <span className="mt-1 text-[#1d656e]"><Icon name="doc" size={20} /></span>
+            <span className="mt-1 text-[#135e66]"><Icon name="doc" size={20} /></span>
             <div className="flex-1">
-              <div className="text-[16px] font-bold text-[#1f1f21]">{f.question}</div>
-              <p className="mt-1 text-[14px] leading-6 text-[#6b7280]">{f.answer}</p>
+              <div className="text-[16px] font-bold text-[#0a0a0a]">{f.question}</div>
+              <p className="mt-1 text-[14px] leading-6 text-[#657381]">{f.answer}</p>
             </div>
             {canEdit && (
               <Btn tone="danger-soft" className="px-3 py-1.5 text-[12px]" onClick={() => void remove(f.id)}>حذف</Btn>
             )}
           </Card>
         ))}
-        {faqs.length === 0 && <Card className="py-10 text-center text-[14px] text-[#6b7280]">لا أسئلة بعد</Card>}
+        {faqs.length === 0 && <Card className="py-10 text-center text-[14px] text-[#657381]">لا أسئلة بعد</Card>}
       </div>
     </>
   )

@@ -36,6 +36,10 @@ const paths: Record<string, string> = {
   mail: 'M4 5h16v14H4zM4 7l8 6 8-6',
   brain: 'M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 3 5 3 3 0 0 0 5 1V6a3 3 0 0 0-3-2zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-3 5 3 3 0 0 1-5 1',
   up: 'M7 17L17 7M9 7h8v8',
+  panel: 'M3 4h18v16H3zM9 4v16',
+  menu: 'M4 6h16M4 12h16M4 18h16',
+  bell: 'M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8M10.3 21a2 2 0 0 0 3.4 0',
+  logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
 }
 
 export default function Icon({ name, size = 20, ...rest }: { name: keyof typeof paths | string } & SVGProps<SVGSVGElement> & { size?: number }) {
