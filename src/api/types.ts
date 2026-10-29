@@ -25,6 +25,12 @@ export interface AuthResponse {
   refresh_expires_at: string
 }
 
+/** ردّ /auth/login لحسابات الإدارة: يُرسل رمز 2FA عبر واتساب بدل التوكن */
+export interface TwoFactorChallenge {
+  requires_2fa: true
+  message: string
+}
+
 export interface ApiOverview {
   generated_at: string
   users: { total: number; active: number; pending_deletion: number; by_role: Record<ApiRole, number> }
