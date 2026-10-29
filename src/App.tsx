@@ -4,6 +4,7 @@ import { AuthProvider } from './auth/AuthContext'
 import Shell from './components/Shell'
 import Guard from './components/Guard'
 import Login from './screens/Login'
+import Activate from './screens/Activate'
 import Dashboard from './screens/Dashboard'
 import Patients from './screens/Patients'
 import PatientProfile from './screens/PatientProfile'
@@ -45,6 +46,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/activate" element={<Activate />} />
           <Route element={<Shell />}>
             {ROUTES.map((r) => (
               <Route key={r.screen} path={`/${r.screen}`} element={<Guard screen={r.screen}>{r.el}</Guard>} />

@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Navigate, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { canView, NAV, ROLE_LABELS } from '../auth/permissions'
 import Icon from './Icon'
@@ -6,7 +6,7 @@ import Icon from './Icon'
 export default function Shell() {
   const { role, logout } = useAuth()
   const nav = useNavigate()
-  if (!role) return null
+  if (!role) return <Navigate to="/login" replace />
   const items = NAV.filter((n) => canView(role, n.screen))
   return (
     <div className="min-h-screen bg-[#f7f7f7]">
