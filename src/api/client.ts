@@ -8,6 +8,7 @@ const REFRESH_KEY = 'sakina-refresh'
 
 export const tokenStore = {
   get: () => localStorage.getItem(TOKEN_KEY),
+  getRefresh: () => localStorage.getItem(REFRESH_KEY),
   set: (t: string, refresh?: string) => {
     localStorage.setItem(TOKEN_KEY, t)
     if (refresh) localStorage.setItem(REFRESH_KEY, refresh)
@@ -28,6 +29,14 @@ export class ApiError extends Error {
 export interface Page<T> {
   data: T[]
   pagination?: { current_page: number; last_page: number; total: number }
+}
+
+/** شكل paginate() الخام في لارافيل (تستخدمه مسارات الدعم) */
+export interface LaravelPaginator<T> {
+  data: T[]
+  current_page: number
+  last_page: number
+  total: number
 }
 
 async function request<T>(

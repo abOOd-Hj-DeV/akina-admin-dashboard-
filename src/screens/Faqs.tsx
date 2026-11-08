@@ -16,16 +16,23 @@ export default function Faqs() {
   const [q, setQ] = useState('')
   const [an, setAn] = useState('')
   const [adding, setAdding] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
   const canEdit = a.level === 'full'
 
   const add = async () => {
     if (!q.trim() || !an.trim()) return
-    if (!API_MOCK) await adminApi.createFaq({ question: q, answer: an }).catch(() => {})
-    setQ(''); setAn(''); setAdding(false); reload()
+    setErr(null)
+    try {
+      if (!API_MOCK) await adminApi.createFaq({ question: q, answer: an })
+      setQ(''); setAn(''); setAdding(false); reload()
+    } catch (e) { setErr(e instanceof Error && e.message ? e.message : 'تعذّر حفظ السؤال.') }
   }
   const remove = async (id: string) => {
-    if (!API_MOCK) await adminApi.deleteFaq(id).catch(() => {})
-    reload()
+    setErr(null)
+    try {
+      if (!API_MOCK) await adminApi.deleteFaq(id)
+      reload()
+    } catch (e) { setErr(e instanceof Error && e.message ? e.message : 'تعذّر حذف السؤال.') }
   }
 
   return (
@@ -35,6 +42,7 @@ export default function Faqs() {
         sub={canEdit ? 'إدارة محتوى الدعم العام — يظهر في تطبيق المريض' : 'عرض فقط'}
         action={canEdit ? <Btn tone="primary" onClick={() => setAdding((v) => !v)}><Icon name="plus" size={14} /> إضافة سؤال</Btn> : undefined}
       />
+      {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}
       {adding && (
         <Card className="mb-4 space-y-3">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="السؤال" className="w-full rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />

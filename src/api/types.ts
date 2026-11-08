@@ -29,6 +29,10 @@ export interface AuthResponse {
 export interface TwoFactorChallenge {
   requires_2fa: true
   message: string
+  /** رمز التحدي الذي يربط الباك اند الـOTP به — مطلوب في /login/2fa و/login/2fa/resend */
+  login_challenge: string
+  challenge_expires_at?: string
+  request_reference?: string
 }
 
 export interface ApiOverview {
@@ -115,26 +119,39 @@ export interface ApiAdminTherapist {
   joined_at?: string
 }
 
+/** SupportService::toArray — لا priority ولا requester؛ النوع type والمُرسل user */
 export interface ApiSupportTicket {
   id: string
+  user_id: string
+  type: 'technical' | 'billing' | 'clinical' | 'other' | string
   subject: string
+  description: string
+  has_attachment: boolean
   status: 'open' | 'in_progress' | 'resolved' | 'closed' | string
-  priority?: 'high' | 'medium' | 'low'
-  category?: string
-  requester?: { id: string; name: string; role: ApiRole }
-  assigned_to?: string | null
+  assigned_to: string | null
   created_at: string
   updated_at: string
+  user?: { id: string; name: string; role?: ApiRole } | null
+  replies?: { id: string; body: string; sender_id: string; created_at: string }[]
 }
 
+/** DocumentRequestService::toArray (staff view) */
 export interface ApiDocument {
   id: string
-  owner?: { id: string; name: string; role: ApiRole }
-  type?: string
-  status: 'pending' | 'approved' | 'rejected' | string
+  doc_type: string
+  status: 'requested' | 'submitted' | 'approved' | 'rejected' | string
   reason?: string | null
-  file_path?: string
-  created_at: string
+  review_note?: string | null
+  has_file: boolean
+  original_name?: string | null
+  download_url?: string | null
+  requested_at: string
+  submitted_at?: string | null
+  reviewed_at?: string | null
+  user_id: string
+  user_name?: string | null
+  requested_by?: string | null
+  requested_by_name?: string | null
 }
 
 export interface ApiFaq {
@@ -145,38 +162,44 @@ export interface ApiFaq {
   is_active?: boolean
 }
 
+/** WalletService::serializeWithdrawal — يرجع therapist_id فقط بدون كائن معالج */
 export interface ApiWithdrawal {
   id: string
-  therapist?: { id: string; full_name: string }
-  amount: string
+  therapist_id: string
+  amount: number
   status: 'pending' | 'approved' | 'rejected' | 'paid' | string
+  payout_details?: unknown
   note?: string | null
+  reviewed_at?: string | null
   created_at: string
 }
 
+/** AuditLogController — timestamp/entity_id/details/actor */
 export interface ApiAuditEntry {
   id: string
-  occurred_at?: string
-  created_at: string
-  actor?: { id: string; name: string; role: ApiRole } | string
   action: string
-  target?: string
-  details?: string
-  ip?: string
+  entity_id?: string | null
+  details?: unknown
+  timestamp: string | null
+  actor?: { id: string | null; name: string | null; role: ApiRole | null }
 }
 
+/** ProgramService::serialize — name/is_core بدون status */
 export interface ApiProgram {
   id: string
-  title: string
+  name: string
   description?: string
-  status?: 'draft' | 'published' | 'archived' | string
+  is_core: boolean
   modules_count?: number
+  created_at?: string
+  updated_at?: string
 }
 
 export interface ApiAdminUser {
   id: string
   name: string
   email: string
+  whatsapp_number?: string
   role: ApiRole
   is_active: boolean
   created_at: string

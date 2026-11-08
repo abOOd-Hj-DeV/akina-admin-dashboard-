@@ -14,14 +14,20 @@ export default function DocRequests() {
   const escalate = a.mask === 'escalate'
   const { data: docRequests = [] } = useAsync(listDocRequests)
   const [done, setDone] = useState<Record<string, string>>({})
+  const [err, setErr] = useState<string | null>(null)
   const act = (id: string, label: string, action?: 'approve' | 'reject') => {
+    setErr(null)
     setDone((d) => ({ ...d, [id]: label }))
-    if (action) void reviewDocument(id, action).catch(() => {})
+    if (action) void reviewDocument(id, action).catch((e: unknown) => {
+      setDone((d) => { const n = { ...d }; delete n[id]; return n })
+      setErr(e instanceof Error && e.message ? e.message : 'تعذّر تنفيذ المراجعة.')
+    })
   }
 
   return (
     <>
       <PageHeader title="طلبات الملفات" sub={escalate ? 'يمكنك مراجعة الطلبات ورفعها للمدير' : undefined} />
+      {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}
       <div className="space-y-4">
         {docRequests.map((d) => {
           const st = done[d.id] ?? d.status

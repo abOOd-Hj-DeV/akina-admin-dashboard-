@@ -14,9 +14,14 @@ export default function Payments() {
   const { data: all = [] } = useAsync(listPayments)
   const list = ownOnly ? all.filter((p) => p.partner) : all
   const [done, setDone] = useState<Record<string, 'approved' | 'rejected'>>({})
+  const [err, setErr] = useState<string | null>(null)
   const act = (id: string, action: 'approve' | 'reject') => {
+    setErr(null)
     setDone((d) => ({ ...d, [id]: action === 'approve' ? 'approved' : 'rejected' }))
-    void reviewPayment(id, action, action === 'reject' ? 'صورة غير واضحة' : undefined).catch(() => {})
+    void reviewPayment(id, action, action === 'reject' ? 'صورة غير واضحة' : undefined).catch((e: unknown) => {
+      setDone((d) => { const n = { ...d }; delete n[id]; return n })
+      setErr(e instanceof Error && e.message ? e.message : 'تعذّر مراجعة الدفعة.')
+    })
   }
   const canAct = a.level === 'full' || ownOnly
 
@@ -28,6 +33,7 @@ export default function Payments() {
         title="مراجعة الحوالات"
         sub={ownOnly ? 'عرض حوالاتك المرتبطة بشراكتك فقط' : undefined}
       />
+      {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}
       <Banner tone="amber"><Icon name="clock" size={14} className="ms-1 inline" /> متوسط وقت التحقق: 12 ساعة — {ownOnly ? pending.length : 24} حوالة بانتظار المراجعة</Banner>
 
       <div className="space-y-4">

@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { homeFor, ROLE_LABELS } from '../auth/permissions'
 import { API_MOCK } from '../api/client'
-import { resendLogin2faApi } from '../api/auth'
 import type { Role } from '../types'
 import Icon from '../components/Icon'
 
@@ -17,7 +16,7 @@ const ROLES: { role: Role; desc: string }[] = [
 ]
 
 export default function Login() {
-  const { login, apiLogin, apiVerify2fa } = useAuth()
+  const { login, apiLogin, apiVerify2fa, apiResend2fa } = useAuth()
   const nav = useNavigate()
   const [wa, setWa] = useState('')
   const [pw, setPw] = useState('')
@@ -62,7 +61,7 @@ export default function Login() {
   }, 'رمز التحقق غير صحيح')
 
   const resend = () => run(async () => {
-    await resendLogin2faApi(wa)
+    await apiResend2fa(wa)
     setInfo('إذا كان طلب الدخول ما زال قائماً، أُرسل رمز جديد.')
   }, 'تعذّر إعادة الإرسال')
 
