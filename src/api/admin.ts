@@ -1,6 +1,6 @@
 /** دوال endpoints الإدارة — /api/v1/admin/* حسب مرجعية الـAPI */
 import { api } from './client'
-import type { Page } from './client'
+import type { LaravelPaginator, Page } from './client'
 import type {
   ApiAdminPatient, ApiAdminPatientDetail, ApiAdminTherapist, ApiAdminUser,
   ApiAuditEntry, ApiDocument, ApiFaq, ApiOverview, ApiPayment,
@@ -45,15 +45,17 @@ export const adminApi = {
   redFlags: (f: { status?: string; priority?: string; type?: string; page?: number } = {}) =>
     api.get<Page<ApiRedFlag> & { stats?: ApiRedFlagStats }>(`/api/v1/admin/red-flags${qs(f)}`),
   redFlag: (id: string) => api.get<{ data: ApiRedFlag }>(`/api/v1/admin/red-flags/${id}`),
-  assignRedFlag: (id: string, assignee_id: string) =>
-    api.post(`/api/v1/admin/red-flags/${id}/assign`, { assignee_id }),
+  assignRedFlag: (id: string, user_id: string) =>
+    api.post(`/api/v1/admin/red-flags/${id}/assign`, { user_id }),
   setRedFlagStatus: (id: string, status: string, action_taken?: string) =>
     api.post(`/api/v1/admin/red-flags/${id}/status`, { status, action_taken }),
 
   // البرامج — + clinical_supervisor
   programs: () => api.get<Page<ApiProgram>>('/api/v1/admin/programs'),
-  createProgram: (body: unknown) => api.post('/api/v1/admin/programs', body),
-  updateProgram: (id: string, body: unknown) => api.put(`/api/v1/admin/programs/${id}`, body),
+  createProgram: (body: { name: string; description: string; is_core?: boolean }) =>
+    api.post<{ message: string; program: ApiProgram }>('/api/v1/admin/programs', body),
+  updateProgram: (id: string, body: Partial<{ name: string; description: string; is_core: boolean }>) =>
+    api.put<{ message: string; program: ApiProgram }>(`/api/v1/admin/programs/${id}`, body),
   deleteProgram: (id: string) => api.del(`/api/v1/admin/programs/${id}`),
   packages: () => api.get<Page<unknown>>('/api/v1/admin/packages'),
 
@@ -64,13 +66,14 @@ export const adminApi = {
     api.post(`/api/v1/admin/documents/${id}/review`, { action, note }),
 
   // الدعم — + clinical_supervisor, support_agent
+  // الباك اند يرجع paginator لارافيل كامل داخل data (data.data = الصفوف)
   tickets: (f: { status?: string; page?: number } = {}) =>
-    api.get<Page<ApiSupportTicket>>(`/api/v1/admin/support${qs(f)}`),
+    api.get<{ data: LaravelPaginator<ApiSupportTicket> }>(`/api/v1/admin/support${qs(f)}`),
   ticket: (id: string) => api.get<{ data: ApiSupportTicket }>(`/api/v1/admin/support/${id}`),
-  assignTicket: (id: string, assignee_id: string) =>
-    api.post(`/api/v1/admin/support/${id}/assign`, { assignee_id }),
-  replyTicket: (id: string, message: string) =>
-    api.post(`/api/v1/admin/support/${id}/replies`, { message }),
+  assignTicket: (id: string, assigned_to: string) =>
+    api.post(`/api/v1/admin/support/${id}/assign`, { assigned_to }),
+  replyTicket: (id: string, body: string) =>
+    api.post(`/api/v1/admin/support/${id}/replies`, { body }),
   setTicketStatus: (id: string, status: string) =>
     api.post(`/api/v1/admin/support/${id}/status`, { status }),
 
@@ -89,7 +92,8 @@ export const adminApi = {
   // المستخدمون — + clinical_supervisor
   users: (f: { role?: string; search?: string; page?: number } = {}) =>
     api.get<Page<ApiAdminUser>>(`/api/v1/admin/users${qs(f)}`),
-  createUser: (body: unknown) => api.post('/api/v1/admin/users', body),
+  createUser: (body: { name: string; email: string; whatsapp_number: string; role: string }) =>
+    api.post<{ message: string; data: ApiAdminUser }>('/api/v1/admin/users', body),
   setUserActive: (id: string, is_active: boolean) =>
     api.patch(`/api/v1/admin/users/${id}/active`, { is_active }),
   resendInvitation: (id: string) => api.post(`/api/v1/admin/users/${id}/invitation/resend`),

@@ -66,40 +66,49 @@ const mapFlag = (f: ApiRedFlag): RedFlag => ({
   detectedAt: f.created_at,
 })
 
-const DOC_STATUS = { pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض' } as const
+const DOC_STATUS = { requested: 'قيد المراجعة', submitted: 'قيد المراجعة', pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض' } as const
+const DOC_TYPE: Record<string, string> = { license: 'رخصة مزاولة', id: 'إثبات هوية', certificate: 'شهادة', other: 'مستند' }
 const mapDoc = (d: ApiDocument): DocRequest => ({
   id: d.id,
-  subject: d.type ?? 'مستند',
-  reason: d.reason ?? '',
-  requestedBy: d.owner?.name ?? '—',
-  date: d.created_at,
+  subject: DOC_TYPE[d.doc_type] ?? d.doc_type ?? 'مستند',
+  reason: d.reason ?? d.review_note ?? '',
+  requestedBy: d.user_name ?? d.requested_by_name ?? '—',
+  date: d.requested_at,
   status: DOC_STATUS[d.status as keyof typeof DOC_STATUS] ?? 'قيد المراجعة',
 })
 
 const TICKET_STATUS = { open: 'مفتوحة', in_progress: 'قيد المعالجة', resolved: 'مغلقة', closed: 'مغلقة' } as const
-const TICKET_PRIO = { high: 'عالية', medium: 'متوسطة', low: 'منخفضة' } as const
+// الباك اند لا يملك priority؛ نشتقّ الأولوية من نوع التذكرة (سريري أعلى، تقني/مالي أوسط)
+const TICKET_TYPE_PRIO: Record<string, Ticket['priority']> = {
+  clinical: 'عالية', billing: 'متوسطة', technical: 'متوسطة', other: 'منخفضة',
+}
 const mapTicket = (t: ApiSupportTicket): Ticket => ({
   id: t.id,
   title: t.subject,
-  openedBy: t.requester?.name ?? '—',
-  priority: TICKET_PRIO[t.priority as keyof typeof TICKET_PRIO] ?? 'متوسطة',
+  openedBy: t.user?.name ?? '—',
+  priority: TICKET_TYPE_PRIO[t.type] ?? 'متوسطة',
   status: TICKET_STATUS[t.status as keyof typeof TICKET_STATUS] ?? 'مفتوحة',
   date: t.created_at,
 })
 
+const auditDetails = (d: unknown): string => {
+  if (d == null) return ''
+  if (typeof d === 'string') return d
+  try { return JSON.stringify(d) } catch { return String(d) }
+}
 const mapAudit = (a: ApiAuditEntry): AuditEntry => ({
-  time: a.occurred_at ?? a.created_at,
-  user: typeof a.actor === 'string' ? a.actor : (a.actor?.name ?? 'SYSTEM'),
-  userRole: typeof a.actor === 'object' && a.actor ? a.actor.role : 'System',
+  time: a.timestamp ?? '',
+  user: a.actor?.name ?? 'SYSTEM',
+  userRole: a.actor?.role ?? 'System',
   action: a.action,
-  target: a.target ?? '—',
-  details: a.details ?? '',
-  ip: a.ip ?? '—',
+  target: a.entity_id ?? '—',
+  details: auditDetails(a.details),
+  ip: '—',
 })
 
 export interface Withdrawal { id: string; therapist: string; amount: number; status: string; date: string }
 const mapWithdrawal = (w: ApiWithdrawal): Withdrawal => ({
-  id: w.id, therapist: w.therapist?.full_name ?? '—',
+  id: w.id, therapist: w.therapist_id,
   amount: Number(w.amount), status: w.status, date: w.created_at,
 })
 
@@ -123,17 +132,18 @@ export const listRedFlags = () =>
 export const listDocRequests = () =>
   API_MOCK ? wait(mock.docRequests) : adminApi.documents().then(r => r.data.map(mapDoc))
 
+// مسار الدعم يرجع paginator لارافيل خام داخل data (الصفوف في data.data)
 export const listTickets = () =>
-  API_MOCK ? wait(mock.tickets) : adminApi.tickets().then(r => r.data.map(mapTicket))
+  API_MOCK ? wait(mock.tickets) : adminApi.tickets().then(r => (r.data?.data ?? []).map(mapTicket))
 
-const PROGRAM_STATUS = { published: 'منشور', draft: 'مسودة', archived: 'مؤرشف' } as const
+// الباك اند لا يملك حالة نشر للبرامج؛ كل برنامج مُعاد من /admin/programs منشور فعلياً
 const mapProgram = (p: ApiProgram): Program => ({
   id: p.id,
-  title: p.title,
-  kind: 'أساسي',
+  title: p.name,
+  kind: p.is_core ? 'أساسي' : 'اختياري',
   modules: p.modules_count ?? 0,
   therapeutic: true,
-  status: PROGRAM_STATUS[p.status as keyof typeof PROGRAM_STATUS] ?? 'مسودة',
+  status: 'منشور',
 })
 
 export const listPrograms = () =>
@@ -158,8 +168,8 @@ export const activityFeed = (): Promise<FeedItem[]> =>
     ? wait(mock.activityFeed)
     : adminApi.audit().then(r => r.data.slice(0, 8).map(a => ({
         text: a.action,
-        by: typeof a.actor === 'string' ? a.actor : (a.actor?.name ?? 'النظام'),
-        at: a.occurred_at ?? a.created_at,
+        by: a.actor?.name ?? 'النظام',
+        at: a.timestamp ?? '',
         dot: '#1d919e',
       })))
 

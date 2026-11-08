@@ -10,20 +10,24 @@ export async function loginApi(whatsapp_number: string, password: string): Promi
   return auth
 }
 
-export async function verifyLogin2faApi(whatsapp_number: string, otp: string): Promise<AuthResponse> {
-  const res = await api.post<AuthResponse>('/api/v1/auth/login/2fa', { whatsapp_number, otp }, false)
+/** الخطوة الثانية: الباك اند يربط الـOTP بـlogin_challenge ويرفض الطلب بدونه (422) */
+export async function verifyLogin2faApi(whatsapp_number: string, otp: string, login_challenge: string): Promise<AuthResponse> {
+  const res = await api.post<AuthResponse>('/api/v1/auth/login/2fa', { whatsapp_number, otp, login_challenge }, false)
   tokenStore.set(res.access_token, res.refresh_token)
   return res
 }
 
-export const resendLogin2faApi = (whatsapp_number: string) =>
-  api.post<{ message: string }>('/api/v1/auth/login/2fa/resend', { whatsapp_number }, false)
+export const resendLogin2faApi = (whatsapp_number: string, login_challenge: string) =>
+  api.post<{ message: string }>('/api/v1/auth/login/2fa/resend', { whatsapp_number, login_challenge }, false)
 
 export const activateApi = (whatsapp_number: string, code: string, password: string, password_confirmation: string) =>
   api.post<{ message: string; user: ApiUser }>('/api/v1/auth/activate', { whatsapp_number, code, password, password_confirmation }, false)
 
+/** /auth/refresh يتطلب refresh_token في الجسم؛ بدونه 422 */
 export async function refreshApi(): Promise<void> {
-  const res = await api.post<AuthResponse>('/api/v1/auth/refresh', {}, false)
+  const refresh_token = tokenStore.getRefresh()
+  if (!refresh_token) throw new Error('no refresh token')
+  const res = await api.post<AuthResponse>('/api/v1/auth/refresh', { refresh_token }, false)
   tokenStore.set(res.access_token, res.refresh_token)
 }
 

@@ -13,14 +13,20 @@ export default function Tickets() {
   const canProcess = a.level === 'full'
   const { data: tickets = [] } = useAsync(listTickets)
   const [closed, setClosed] = useState<Record<string, boolean>>({})
+  const [err, setErr] = useState<string | null>(null)
   const close = (id: string) => {
+    setErr(null)
     setClosed((c) => ({ ...c, [id]: true }))
-    void setTicketStatus(id, 'closed').catch(() => {})
+    void setTicketStatus(id, 'closed').catch((e: unknown) => {
+      setClosed((c) => ({ ...c, [id]: false }))
+      setErr(e instanceof Error && e.message ? e.message : 'تعذّر إغلاق التذكرة.')
+    })
   }
 
   return (
     <>
       <PageHeader title="الدعم الفني" sub={canProcess ? 'معالجة التذاكر واتصالات الطوارئ ومستندات SOP' : 'عرض فقط'} />
+      {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}
       <Card className="p-4">
         <SearchBar placeholder="ابحث برقم التذكرة أو العنوان..." />
         <div className="mt-4">
