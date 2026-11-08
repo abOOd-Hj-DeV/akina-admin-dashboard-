@@ -53,9 +53,9 @@ export const adminApi = {
   // البرامج — + clinical_supervisor
   programs: () => api.get<Page<ApiProgram>>('/api/v1/admin/programs'),
   createProgram: (body: { name: string; description: string; is_core?: boolean }) =>
-    api.post<{ data: ApiProgram }>('/api/v1/admin/programs', body),
+    api.post<{ message: string; program: ApiProgram }>('/api/v1/admin/programs', body),
   updateProgram: (id: string, body: Partial<{ name: string; description: string; is_core: boolean }>) =>
-    api.put<{ data: ApiProgram }>(`/api/v1/admin/programs/${id}`, body),
+    api.put<{ message: string; program: ApiProgram }>(`/api/v1/admin/programs/${id}`, body),
   deleteProgram: (id: string) => api.del(`/api/v1/admin/programs/${id}`),
   packages: () => api.get<Page<unknown>>('/api/v1/admin/packages'),
 

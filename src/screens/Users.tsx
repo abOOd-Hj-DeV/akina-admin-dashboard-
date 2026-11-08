@@ -10,7 +10,12 @@ import { Badge, Btn, Card, PageHeader, Table } from '../components/ui'
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
 
-const STAFF_ROLES: Role[] = ['admin', 'clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager']
+// الأدوار التي يسمح الباك اند (StaffAccountService::CREATABLE_ROLES) لكل فاعل بإنشائها عبر /admin/users.
+// إنشاء معالج يتطلب حقول therapist.* الإضافية فلا نعرضه هنا؛ support_agent/content_manager غير قابلة للإنشاء من الـAPI.
+const CREATABLE_ROLES: Partial<Record<Role, Role[]>> = {
+  super_admin: ['admin', 'clinical_supervisor', 'finance_partner'],
+  admin: ['clinical_supervisor', 'finance_partner'],
+}
 
 const MOCK_USERS: ApiAdminUser[] = [
   { id: 'U-01', name: 'أحمد الإداري', email: 'admin@sakina.app', role: 'admin', is_active: true, created_at: '2025-09-01' },
@@ -23,7 +28,8 @@ const MOCK_USERS: ApiAdminUser[] = [
 export default function Users() {
   const { role } = useAuth()
   const a = role ? access(role, 'users') : { level: 'denied' as const }
-  const canEdit = a.level === 'full'
+  const staffRoles: Role[] = (role && CREATABLE_ROLES[role]) ?? []
+  const canEdit = a.level === 'full' && staffRoles.length > 0
   const { data: users = [], reload } = useAsync(
     () => (API_MOCK ? Promise.resolve(MOCK_USERS) : adminApi.users().then((r) => r.data)),
   )
@@ -31,7 +37,7 @@ export default function Users() {
   const [name, setName] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [err, setErr] = useState<string | null>(null)
-  const [r, setR] = useState<ApiRole>('support_agent')
+  const [r, setR] = useState<ApiRole>('clinical_supervisor')
   const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -78,7 +84,7 @@ export default function Users() {
             <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="البريد الإلكتروني" dir="ltr" className="rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
             <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="رقم الواتساب (مثال: +963900000000)" dir="ltr" inputMode="tel" className="rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
             <select value={r} onChange={(e) => setR(e.target.value as ApiRole)} className="rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]">
-              {STAFF_ROLES.map((x) => <option key={x} value={x}>{ROLE_LABELS[x]}</option>)}
+              {staffRoles.map((x) => <option key={x} value={x}>{ROLE_LABELS[x]}</option>)}
             </select>
           </div>
           <div className="flex gap-2">
