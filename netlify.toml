@@ -1,0 +1,18 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# The test backend is HTTP-only, so the host proxies /api to it on the same origin.
+[[redirects]]
+  from = "/api/*"
+  to = "http://api.sakinatherapy.app/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

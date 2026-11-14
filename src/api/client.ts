@@ -1,7 +1,9 @@
 /** عميل HTTP موحّد للباك اند — Bearer token + Idempotency-Key + أخطاء مُنمّطة */
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? ''
-export const API_MOCK: boolean = !API_URL || import.meta.env.VITE_API_MOCK === 'true'
+// VITE_API_URL فارغ مع VITE_API_MOCK=false = باك اند حقيقي على نفس الأصل (عبر بروكسي /api)
+export const API_MOCK: boolean =
+  import.meta.env.VITE_API_MOCK === 'true' || (!API_URL && import.meta.env.VITE_API_MOCK !== 'false')
 
 const TOKEN_KEY = 'sakina-token'
 const REFRESH_KEY = 'sakina-refresh'
