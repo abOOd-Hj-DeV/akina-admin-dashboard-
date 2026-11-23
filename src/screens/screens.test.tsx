@@ -5,10 +5,10 @@ import type { ReactElement } from 'react'
 import type { Role } from '../types'
 import { stubBrowser } from '../test/storage'
 
-const auth = vi.hoisted(() => ({ role: null as Role | null }))
+const auth = vi.hoisted(() => ({ role: null as Role | null, ready: true }))
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
-    role: auth.role, userName: 'U', ready: true, login: () => {}, apiLogin: async () => 'admin',
+    role: auth.role, userName: 'U', ready: auth.ready, login: () => {}, apiLogin: async () => 'admin',
     apiVerify2fa: async () => 'admin', apiResend2fa: async () => {}, logout: () => {}, logoutAll: async () => {},
   }),
 }))
@@ -25,6 +25,7 @@ beforeEach(() => {
   vi.stubEnv('VITE_API_URL', '')
   vi.stubEnv('VITE_API_MOCK', 'false')
   stubBrowser()
+  auth.ready = true
 })
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 
@@ -35,6 +36,12 @@ describe('الشاشات', () => {
     const html = await render(() => import('./Login'))
     expect(selectedCountry(html)).toBe('SY')
     expect(html).toContain('href="/forgot-password"')
+  })
+  it('الدخول معطّل أثناء استعادة الجلسة (لا سباق بين التجديد والدخول الجديد)', async () => {
+    auth.ready = false
+    const html = await render(() => import('./Login'))
+    expect(html).toContain('جارٍ استعادة الجلسة')
+    expect(html).not.toContain('رمز الدولة')
   })
   it('استعادة كلمة المرور: تبدأ بحقل الرقم (سوريا افتراضياً)', async () => {
     const html = await render(() => import('./ForgotPassword'))

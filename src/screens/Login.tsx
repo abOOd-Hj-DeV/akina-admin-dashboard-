@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import type { CountryCode } from 'libphonenumber-js/min'
 import { useAuth } from '../auth/AuthContext'
 import { homeFor, ROLE_LABELS } from '../auth/permissions'
@@ -25,7 +25,7 @@ type Field = 'whatsapp_number' | 'password' | 'otp'
 const field = 'w-full rounded-xl border px-4 py-3 text-[14px] outline-none focus:border-[#1d919e]'
 
 export default function Login() {
-  const { login, apiLogin, apiVerify2fa, apiResend2fa } = useAuth()
+  const { role, ready, login, apiLogin, apiVerify2fa, apiResend2fa } = useAuth()
   const nav = useNavigate()
   const [wa, setWa] = useState('')
   const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY)
@@ -108,6 +108,10 @@ export default function Login() {
       setInfo('إذا كان طلب الدخول ما زال قائماً، أُرسل رمز جديد.')
     }, 'تعذّر إعادة الإرسال')
   }
+
+  // لا دخول جديد أثناء استعادة الجلسة: التجديد الجاري قد يستبدل توكنات الحساب الجديد
+  if (!ready) return <div className="auth-page" role="status">جارٍ استعادة الجلسة…</div>
+  if (role && !API_MOCK) return <Navigate to={homeFor(role)} replace />
 
   return (
     <div className="auth-page">
