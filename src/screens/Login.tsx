@@ -111,7 +111,7 @@ export default function Login() {
 
   // لا دخول جديد أثناء استعادة الجلسة: التجديد الجاري قد يستبدل توكنات الحساب الجديد
   if (!ready) return <div className="auth-page" role="status">جارٍ استعادة الجلسة…</div>
-  if (role && !API_MOCK) return <Navigate to={homeFor(role)} replace />
+  if (role && !API_MOCK) return <Navigate to={`/${homeFor(role)}`} replace />
 
   return (
     <div className="auth-page">
