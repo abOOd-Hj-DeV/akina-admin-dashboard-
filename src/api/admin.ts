@@ -4,7 +4,7 @@ import type { LaravelPaginator, Page } from './client'
 import type {
   ApiAdminPatient, ApiAdminPatientDetail, ApiAdminTherapist, ApiAdminUser,
   ApiAuditEntry, ApiDocument, ApiFaq, ApiOverview, ApiPayment,
-  ApiProgram, ApiRedFlag, ApiRedFlagStats, ApiSupportTicket, ApiWithdrawal,
+  ApiProgram, ApiRedFlag, ApiRedFlagStats, ApiSupportTicket, ApiWithdrawal, CreateUserBody,
 } from './types'
 
 const qs = (params: Record<string, string | number | boolean | undefined>) => {
@@ -92,8 +92,8 @@ export const adminApi = {
   // المستخدمون — + clinical_supervisor
   users: (f: { role?: string; search?: string; page?: number } = {}) =>
     api.get<Page<ApiAdminUser>>(`/api/v1/admin/users${qs(f)}`),
-  createUser: (body: { name: string; email: string; whatsapp_number: string; role: string }) =>
-    api.post<{ message: string; data: ApiAdminUser }>('/api/v1/admin/users', body),
+  createUser: (body: CreateUserBody) =>
+    api.post<{ message: string; user: ApiAdminUser; invitation_expires_at: string }>('/api/v1/admin/users', body),
   setUserActive: (id: string, is_active: boolean) =>
     api.patch(`/api/v1/admin/users/${id}/active`, { is_active }),
   resendInvitation: (id: string) => api.post(`/api/v1/admin/users/${id}/invitation/resend`),

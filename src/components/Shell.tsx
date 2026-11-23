@@ -6,7 +6,7 @@ import { API_MOCK } from '../api/client'
 import { adminApi } from '../api/admin'
 import Icon from './Icon'
 
-const TITLE_FOR: Record<string, string> = { 'patient-profile': 'ملف المريض' }
+const TITLE_FOR: Record<string, string> = { 'patient-profile': 'ملف المريض', account: 'حسابي' }
 
 function titleFor(pathname: string) {
   const seg = pathname.replace(/^\/+/, '').split('/')[0] || 'dashboard'
@@ -14,7 +14,7 @@ function titleFor(pathname: string) {
 }
 
 export default function Shell() {
-  const { role, userName, logout } = useAuth()
+  const { role, userName, logout, ready } = useAuth()
   const nav = useNavigate()
   const { pathname } = useLocation()
   const [collapsed, setCollapsed] = useState(false)
@@ -27,6 +27,7 @@ export default function Shell() {
   useEffect(() => { setMobileNav(false); setNotifOpen(false) }, [pathname])
 
   useEffect(() => {
+    if (!role) return
     let live = true
     adminApi.notifications()
       .then((p) => {
@@ -37,7 +38,7 @@ export default function Shell() {
       })
       .catch(() => {})
     return () => { live = false }
-  }, [])
+  }, [role])
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -48,6 +49,7 @@ export default function Shell() {
   }, [])
 
   const items = useMemo(() => (role ? NAV.filter((n) => canView(role, n.screen)) : []), [role])
+  if (!ready) return <div className="auth-page" role="status">جارٍ استعادة الجلسة…</div>
   if (!role) return <Navigate to="/login" replace />
 
   const title = titleFor(pathname)
@@ -152,6 +154,9 @@ export default function Shell() {
                 </div>
               )}
             </div>
+            <NavLink to="/account" className="icon-button" aria-label="حسابي" title="حسابي — كلمة المرور والجلسات">
+              <Icon name="lock" />
+            </NavLink>
             <button
               type="button"
               className="icon-button logout-button"

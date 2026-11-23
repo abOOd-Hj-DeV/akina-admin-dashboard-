@@ -1,5 +1,5 @@
 /** مصادقة /api/v1/auth — login يرجع توكن + دور المستخدم، أو يطلب رمز 2FA لحسابات الإدارة */
-import { api, tokenStore } from './client'
+import { api, refreshSession, tokenStore } from './client'
 import type { AuthResponse, ApiUser, TwoFactorChallenge } from './types'
 
 export async function loginApi(whatsapp_number: string, password: string): Promise<AuthResponse | TwoFactorChallenge> {
@@ -23,16 +23,48 @@ export const resendLogin2faApi = (whatsapp_number: string, login_challenge: stri
 export const activateApi = (whatsapp_number: string, code: string, password: string, password_confirmation: string) =>
   api.post<{ message: string; user: ApiUser }>('/api/v1/auth/activate', { whatsapp_number, code, password, password_confirmation }, false)
 
+/** استعادة كلمة المرور: يرسل رمزاً عبر واتساب (الرد لا يكشف وجود الحساب) */
+export const forgotPasswordApi = (whatsapp_number: string) =>
+  api.post<{ message: string }>('/api/v1/auth/forgot-password', { whatsapp_number }, false)
+
+export const resetPasswordApi = (whatsapp_number: string, otp: string, password: string, password_confirmation: string) =>
+  api.post<{ message: string }>('/api/v1/auth/reset-password', { whatsapp_number, otp, password, password_confirmation }, false)
+
+export const changePasswordApi = (current_password: string, password: string, password_confirmation: string) =>
+  api.put<{ message: string }>('/api/v1/auth/user/password', { current_password, password, password_confirmation })
+
 /** /auth/refresh يتطلب refresh_token في الجسم؛ بدونه 422 */
 export async function refreshApi(): Promise<void> {
-  const refresh_token = tokenStore.getRefresh()
-  if (!refresh_token) throw new Error('no refresh token')
-  const res = await api.post<AuthResponse>('/api/v1/auth/refresh', { refresh_token }, false)
-  tokenStore.set(res.access_token, res.refresh_token)
+  if (!tokenStore.getRefresh()) throw new Error('no refresh token')
+  if (!(await refreshSession())) throw new Error('refresh failed')
 }
 
 export const meApi = () => api.get<{ user: ApiUser }>('/api/v1/auth/user')
 
+let restoring: Promise<ApiUser | null> | null = null
+
+/** عند تحميل الصفحة: توكن الوصول غير محفوظ، فنجدّده من توكن التجديد ثم نقرأ المستخدم */
+export function restoreSessionApi(): Promise<ApiUser | null> {
+  if (restoring) return restoring
+  restoring = (async () => {
+    try {
+      if (!tokenStore.getRefresh() || !(await refreshSession())) { tokenStore.clear(); return null }
+      return (await meApi()).user
+    } catch {
+      tokenStore.clear()
+      return null
+    } finally {
+      restoring = null
+    }
+  })()
+  return restoring
+}
+
 export async function logoutApi(): Promise<void> {
   try { await api.post('/api/v1/auth/logout', {}, false) } finally { tokenStore.clear() }
+}
+
+export async function logoutAllApi(): Promise<void> {
+  await api.post('/api/v1/auth/logout-all', {}, false)
+  tokenStore.clear()
 }

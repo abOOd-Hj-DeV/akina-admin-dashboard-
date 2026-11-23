@@ -199,8 +199,20 @@ export interface ApiAdminUser {
   id: string
   name: string
   email: string
+  /** رقم واتساب بصيغة E.164 — معرّف تسجيل الدخول */
   whatsapp_number?: string
   role: ApiRole
   is_active: boolean
+  activated?: boolean
+  last_login?: string | null
   created_at: string
+}
+
+/** POST /admin/users — UserAccountController::store */
+export interface CreateUserBody {
+  name: string
+  email: string
+  whatsapp_number: string
+  role: ApiRole
+  therapist?: { specialty: string; country: string; languages?: string[]; full_name?: string }
 }

@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode, useRef } from 'react'
 import type { Role } from '../types'
-import { loginApi, logoutApi, resendLogin2faApi, verifyLogin2faApi } from '../api/auth'
-import { tokenStore } from '../api/client'
-import type { ApiRole, AuthResponse } from '../api/types'
+import { loginApi, logoutAllApi, logoutApi, resendLogin2faApi, restoreSessionApi, verifyLogin2faApi } from '../api/auth'
+import { API_MOCK, tokenStore } from '../api/client'
+import type { ApiRole, ApiUser, AuthResponse } from '../api/types'
 
 const ADMIN_ROLES = new Set<ApiRole>([
   'super_admin', 'admin', 'clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager',
@@ -12,6 +12,8 @@ interface AuthState {
   role: Role | null
   /** اسم المستخدم المعروض في بطاقة الملف الشخصي */
   userName: string | null
+  /** false أثناء استعادة الجلسة من توكن التجديد عند تحميل الصفحة */
+  ready: boolean
   /** دخول تجريبي (وضع الـmock) */
   login: (role: Role) => void
   /** دخول حقيقي عبر /api/v1/auth/login — يقبل أدوار الإدارة فقط؛ يرجع '2fa' إذا أُرسل رمز تحقق */
@@ -21,22 +23,60 @@ interface AuthState {
   /** إعادة إرسال رمز 2FA للتحدي الجاري */
   apiResend2fa: (whatsapp: string) => Promise<void>
   logout: () => void
+  /** إنهاء كل الجلسات على كل الأجهزة (بما فيها هذه) */
+  logoutAll: () => Promise<void>
 }
 
 const Ctx = createContext<AuthState>({
-  role: null, userName: null, login: () => {}, apiLogin: async () => 'admin', apiVerify2fa: async () => 'admin', apiResend2fa: async () => {}, logout: () => {},
+  role: null, userName: null, ready: true, login: () => {}, apiLogin: async () => 'admin', apiVerify2fa: async () => 'admin',
+  apiResend2fa: async () => {}, logout: () => {}, logoutAll: async () => {},
 })
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<Role | null>(() => {
-    const s = sessionStorage.getItem('sakina-role')
-    return (s as Role) || null
-  })
-  const [userName, setUserName] = useState<string | null>(() => sessionStorage.getItem('sakina-user-name'))
+const clearSessionKeys = () => {
+  sessionStorage.removeItem('sakina-role')
+  sessionStorage.removeItem('sakina-user-name')
+}
 
-  // 401 من أي استدعاء API → إنهاء الجلسة
+export function AuthProvider({ children }: { children: ReactNode }) {
+  // الوضع الحي: الدور يُستعاد من الخادم فقط (لا نثق بقيمة مخزّنة بدون توكن)
+  const [role, setRole] = useState<Role | null>(() => (API_MOCK ? (sessionStorage.getItem('sakina-role') as Role) || null : null))
+  const [userName, setUserName] = useState<string | null>(() => (API_MOCK ? sessionStorage.getItem('sakina-user-name') : null))
+  const [ready, setReady] = useState<boolean>(() => API_MOCK || !tokenStore.getRefresh())
+
+  const applyUser = (user: ApiUser): Role => {
+    if (!ADMIN_ROLES.has(user.role)) {
+      tokenStore.clear()
+      throw new Error('هذا الحساب ليس حساب إدارة — استخدم تطبيق المريض أو بوابة المعالج')
+    }
+    const r = user.role as Role
+    sessionStorage.setItem('sakina-role', r)
+    sessionStorage.setItem('sakina-user-name', user.name)
+    setUserName(user.name)
+    setRole(r)
+    return r
+  }
+
+  const reset = () => { clearSessionKeys(); setRole(null); setUserName(null) }
+
   useEffect(() => {
-    const onUnauth = () => { setRole(null); setUserName(null) }
+    if (API_MOCK) return
+    if (!tokenStore.getRefresh()) { clearSessionKeys(); return }
+    let live = true
+    void restoreSessionApi().then((user) => {
+      if (!live) return
+      try {
+        if (user) applyUser(user)
+        else reset()
+      } catch { reset() }
+      setReady(true)
+    })
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 401 من أي استدعاء API (بعد فشل التجديد) → إنهاء الجلسة
+  useEffect(() => {
+    const onUnauth = () => reset()
     window.addEventListener('sakina:unauthenticated', onUnauth)
     return () => window.removeEventListener('sakina:unauthenticated', onUnauth)
   }, [])
@@ -48,18 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(r)
   }
 
-  const finishLogin = (res: AuthResponse): Role => {
-    if (!ADMIN_ROLES.has(res.user.role)) {
-      tokenStore.clear()
-      throw new Error('هذا الحساب ليس حساب إدارة — استخدم تطبيق المريض أو بوابة المعالج')
-    }
-    const r = res.user.role as Role
-    sessionStorage.setItem('sakina-role', r)
-    sessionStorage.setItem('sakina-user-name', res.user.name)
-    setUserName(res.user.name)
-    setRole(r)
-    return r
-  }
+  const finishLogin = (res: AuthResponse): Role => applyUser(res.user)
 
   const challengeRef = useRef<string | null>(null)
 
@@ -88,13 +117,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    sessionStorage.removeItem('sakina-role')
-    sessionStorage.removeItem('sakina-user-name')
     void logoutApi().catch(() => tokenStore.clear())
-    setUserName(null)
-    setRole(null)
+    reset()
   }
-  return <Ctx.Provider value={{ role, userName, login, apiLogin, apiVerify2fa, apiResend2fa, logout }}>{children}</Ctx.Provider>
+
+  const logoutAll = async () => {
+    await logoutAllApi()
+    reset()
+  }
+
+  return (
+    <Ctx.Provider value={{ role, userName, ready, login, apiLogin, apiVerify2fa, apiResend2fa, logout, logoutAll }}>
+      {children}
+    </Ctx.Provider>
+  )
 }
 
 export const useAuth = () => useContext(Ctx)

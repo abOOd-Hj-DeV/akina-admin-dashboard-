@@ -77,11 +77,11 @@ const btnClasses: Record<BtnTone, string> = {
   ghost: 'inline-flex min-h-[36px] items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[14px] font-semibold text-[#1d919e] transition hover:bg-[#e7f4f5] disabled:opacity-50',
 }
 
-export function Btn({ children, tone = 'primary', onClick, className = '', disabled }: {
-  children: ReactNode; tone?: BtnTone; onClick?: () => void; className?: string; disabled?: boolean
+export function Btn({ children, tone = 'primary', onClick, className = '', disabled, type = 'button' }: {
+  children: ReactNode; tone?: BtnTone; onClick?: () => void; className?: string; disabled?: boolean; type?: 'button' | 'submit'
 }) {
   return (
-    <button onClick={onClick} disabled={disabled} className={`${btnClasses[tone]} ${className}`}>
+    <button type={type} onClick={onClick} disabled={disabled} className={`${btnClasses[tone]} ${className}`}>
       {children}
     </button>
   )

@@ -1,0 +1,40 @@
+import { describe, expect, it } from 'vitest'
+import { buildInvite, mapInviteErrors, splitLanguages } from './invite'
+
+const base = { name: ' د. ريم ', email: 'reem@sakina.app', whatsapp: '0983321260', country: 'SY' as const }
+
+describe('دعوة مستخدم (POST /admin/users)', () => {
+  it('دعوة معالج ترسل therapist.specialty/country/languages والرقم بصيغة E.164', () => {
+    const { body, errors } = buildInvite({ ...base, role: 'therapist', specialty: 'علاج معرفي', therapistCountry: 'سوريا', languages: 'العربية، English , ' })
+    expect(errors).toEqual({})
+    expect(body).toEqual({
+      name: 'د. ريم', email: 'reem@sakina.app', whatsapp_number: '+963983321260', role: 'therapist',
+      therapist: { specialty: 'علاج معرفي', country: 'سوريا', languages: ['العربية', 'English'] },
+    })
+  })
+  it('اللغات اختيارية', () => {
+    const { body } = buildInvite({ ...base, role: 'therapist', specialty: 'x', therapistCountry: 'SY', languages: '' })
+    expect(body?.therapist).toEqual({ specialty: 'x', country: 'SY' })
+  })
+  it('التخصص والدولة مطلوبان للمعالج', () => {
+    const { body, errors } = buildInvite({ ...base, role: 'therapist' })
+    expect(body).toBeNull()
+    expect(Object.keys(errors).sort()).toEqual(['therapist.country', 'therapist.specialty'])
+  })
+  it.each(['support_agent', 'content_manager', 'admin'] as const)('دعوة %s بدون حقول المعالج', (role) => {
+    const { body } = buildInvite({ ...base, role })
+    expect(body).toEqual({ name: 'د. ريم', email: 'reem@sakina.app', whatsapp_number: '+963983321260', role })
+  })
+  it('رقم غير صالح → خطأ تحت الحقل', () => {
+    const { body, errors } = buildInvite({ ...base, whatsapp: '123', role: 'admin' })
+    expect(body).toBeNull()
+    expect(errors.whatsapp_number).toBe('رقم واتساب غير صحيح.')
+  })
+  it('أخطاء الخادم تُوزّع على الحقول', () => {
+    expect(mapInviteErrors({ email: 'taken', 'therapist.languages.0': 'bad' }, 'x')).toEqual({ email: 'taken', 'therapist.languages': 'bad' })
+    expect(mapInviteErrors({}, 'Forbidden')).toEqual({ form: 'Forbidden' })
+  })
+  it('splitLanguages يقبل الفاصلة العربية والإنجليزية', () => {
+    expect(splitLanguages('a، b,c')).toEqual(['a', 'b', 'c'])
+  })
+})

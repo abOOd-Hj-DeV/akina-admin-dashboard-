@@ -1,24 +1,18 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
-import { access, ROLE_LABELS } from '../auth/permissions'
+import { access, INVITABLE_STAFF_ROLES, ROLE_LABELS } from '../auth/permissions'
 import { API_MOCK } from '../api/client'
 import { adminApi } from '../api/admin'
-import type { ApiAdminUser, ApiRole } from '../api/types'
+import type { ApiAdminUser } from '../api/types'
 import type { Role } from '../types'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, PageHeader, Table } from '../components/ui'
+import InviteUserForm from '../components/InviteUserForm'
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
 
-// الأدوار التي يسمح الباك اند (StaffAccountService::CREATABLE_ROLES) لكل فاعل بإنشائها عبر /admin/users.
-// إنشاء معالج يتطلب حقول therapist.* الإضافية فلا نعرضه هنا؛ support_agent/content_manager غير قابلة للإنشاء من الـAPI.
-const CREATABLE_ROLES: Partial<Record<Role, Role[]>> = {
-  super_admin: ['admin', 'clinical_supervisor', 'finance_partner'],
-  admin: ['clinical_supervisor', 'finance_partner'],
-}
-
 const MOCK_USERS: ApiAdminUser[] = [
-  { id: 'U-01', name: 'أحمد الإداري', email: 'admin@sakina.app', role: 'admin', is_active: true, created_at: '2025-09-01' },
+  { id: 'U-01', name: 'أحمد الإداري', email: 'admin@sakina.app', whatsapp_number: '+963900000001', role: 'admin', is_active: true, created_at: '2025-09-01' },
   { id: 'U-02', name: 'د. سالم المشرف', email: 'sup@sakina.app', role: 'clinical_supervisor', is_active: true, created_at: '2025-09-05' },
   { id: 'U-03', name: 'شريك المالية', email: 'fin@sakina.app', role: 'finance_partner', is_active: true, created_at: '2025-09-10' },
   { id: 'U-04', name: 'موظف الدعم', email: 'supp@sakina.app', role: 'support_agent', is_active: false, created_at: '2025-10-02' },
@@ -28,35 +22,14 @@ const MOCK_USERS: ApiAdminUser[] = [
 export default function Users() {
   const { role } = useAuth()
   const a = role ? access(role, 'users') : { level: 'denied' as const }
-  const staffRoles: Role[] = (role && CREATABLE_ROLES[role]) ?? []
+  const staffRoles: Role[] = (role && INVITABLE_STAFF_ROLES[role]) ?? []
   const canEdit = a.level === 'full' && staffRoles.length > 0
   const { data: users = [], reload } = useAsync(
     () => (API_MOCK ? Promise.resolve(MOCK_USERS) : adminApi.users().then((r) => r.data)),
   )
-  const [email, setEmail] = useState('')
-  const [name, setName] = useState('')
-  const [whatsapp, setWhatsapp] = useState('')
   const [err, setErr] = useState<string | null>(null)
-  const [r, setR] = useState<ApiRole>('clinical_supervisor')
   const [adding, setAdding] = useState(false)
-  const [busy, setBusy] = useState(false)
 
-  // الباك اند يطلب whatsapp_number (الدعوة ترسل عبر واتساب) ويرفض بدونه 422
-  const WHATSAPP_RE = /^\+?[0-9]{8,15}$/
-  const invite = async () => {
-    const wa = whatsapp.replace(/[\s-]/g, '')
-    if (!email.trim() || !name.trim()) return
-    if (!WHATSAPP_RE.test(wa)) { setErr('رقم الواتساب يجب أن يكون 8–15 رقماً (مع رمز الدولة).'); return }
-    setBusy(true); setErr(null)
-    try {
-      if (!API_MOCK) await adminApi.createUser({ name: name.trim(), email: email.trim(), whatsapp_number: wa, role: r })
-      setEmail(''); setName(''); setWhatsapp(''); setAdding(false); reload()
-    } catch (e) {
-      setErr(errText(e, 'تعذّر إرسال الدعوة.'))
-    } finally {
-      setBusy(false)
-    }
-  }
   const toggle = async (u: ApiAdminUser) => {
     setErr(null)
     try {
@@ -78,26 +51,14 @@ export default function Users() {
       />
       {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}
       {adding && (
-        <Card className="mb-4 space-y-3">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="الاسم" className="rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="البريد الإلكتروني" dir="ltr" className="rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
-            <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="رقم الواتساب (مثال: +963900000000)" dir="ltr" inputMode="tel" className="rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]" />
-            <select value={r} onChange={(e) => setR(e.target.value as ApiRole)} className="rounded-xl border border-[#ebebeb] px-4 py-2.5 text-[14px] outline-none focus:border-[#1d919e]">
-              {staffRoles.map((x) => <option key={x} value={x}>{ROLE_LABELS[x]}</option>)}
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <Btn tone="green" disabled={busy} onClick={() => void invite()}>إرسال الدعوة</Btn>
-            <Btn tone="ghost" onClick={() => setAdding(false)}>إلغاء</Btn>
-          </div>
-        </Card>
+        <InviteUserForm roles={staffRoles} onCancel={() => setAdding(false)} onDone={() => { setAdding(false); reload() }} />
       )}
       <Card className="p-4">
-        <Table cols={['الاسم', 'البريد', 'الدور', 'الحالة', 'انضم', 'إجراءات']}>
+        <Table cols={['الاسم', 'واتساب', 'البريد', 'الدور', 'الحالة', 'انضم', 'إجراءات']}>
           {users.map((u) => (
             <tr key={u.id} className="border-t border-gray-50">
               <td className="px-3 py-3 font-medium text-[#0a0a0a]">{u.name}</td>
+              <td className="px-3 py-3 text-[#0a0a0a]" dir="ltr">{u.whatsapp_number || '—'}</td>
               <td className="px-3 py-3 text-[#657381]" dir="ltr">{u.email}</td>
               <td className="px-3 py-3"><Badge tone="purple">{u.role in ROLE_LABELS ? ROLE_LABELS[u.role as Role] : u.role}</Badge></td>
               <td className="px-3 py-3"><Badge tone={u.is_active ? 'green' : 'gray'}>{u.is_active ? 'نشط' : 'معطّل'}</Badge></td>

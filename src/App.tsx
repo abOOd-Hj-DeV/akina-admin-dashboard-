@@ -5,6 +5,8 @@ import Shell from './components/Shell'
 import Guard from './components/Guard'
 import Login from './screens/Login'
 import Activate from './screens/Activate'
+import ForgotPassword from './screens/ForgotPassword'
+import Account from './screens/Account'
 import Dashboard from './screens/Dashboard'
 import Patients from './screens/Patients'
 import PatientProfile from './screens/PatientProfile'
@@ -47,10 +49,12 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/activate" element={<Activate />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route element={<Shell />}>
             {ROUTES.map((r) => (
               <Route key={r.screen} path={`/${r.screen}`} element={<Guard screen={r.screen}>{r.el}</Guard>} />
             ))}
+            <Route path="/account" element={<Account />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Route>
         </Routes>

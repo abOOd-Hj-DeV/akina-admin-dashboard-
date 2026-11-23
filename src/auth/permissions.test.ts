@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { access, canView, homeFor } from './permissions'
+import { access, canView, homeFor, canInviteTherapist, INVITABLE_STAFF_ROLES } from './permissions'
 import type { Role, Screen } from '../types'
 
 const roles: Role[] = ['super_admin', 'admin', 'clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager']
@@ -41,7 +41,8 @@ describe('مصفوفة الصلاحيات', () => {
     expect(access('content_manager', 'programs').level).toBe('denied')
     expect(access('support_agent', 'patients').level).toBe('denied')
     expect(access('support_agent', 'doc-requests').level).toBe('denied')
-    expect(access('clinical_supervisor', 'therapists').level).toBe('denied')
+    // المشرف: دعوة معالج فقط (بدون قائمة)
+    expect(access('clinical_supervisor', 'therapists')).toEqual({ level: 'limited', mask: 'invite-only' })
     expect(access('clinical_supervisor', 'doc-requests').level).toBe('denied')
   })
   it('وجهة الدخول لكل دور شاشة مسموحة', () => {
@@ -51,5 +52,16 @@ describe('مصفوفة الصلاحيات', () => {
     expect(access('admin', 'patients').mask).toBe('no-clinical')
     expect(access('admin', 'clinical').level).toBe('denied')
     expect(access('support_agent', 'red-flags').mask).toBe('alert')
+  })
+
+  it('أدوار الدعوة: الدعم ومدير المحتوى للرئيسي والمدير فقط (عقد §4)', () => {
+    expect(INVITABLE_STAFF_ROLES.super_admin).toEqual(['admin', 'clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager'])
+    expect(INVITABLE_STAFF_ROLES.admin).toEqual(['clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager'])
+    expect(INVITABLE_STAFF_ROLES.clinical_supervisor).toBeUndefined()
+    expect(INVITABLE_STAFF_ROLES.admin).not.toContain('admin')
+  })
+  it('دعوة معالج: الرئيسي والمدير والمشرف السريري', () => {
+    expect(roles.filter(canInviteTherapist)).toEqual(['super_admin', 'admin', 'clinical_supervisor'])
+    expect(canInviteTherapist(null)).toBe(false)
   })
 })

@@ -21,6 +21,7 @@ export interface Access {
     | 'escalate'      // support: رفع للمدير
     | 'clinical'      // supervisor: التقارير السريرية فقط
     | 'earnings'      // finance: تقارير أرباحه فقط
+    | 'invite-only'   // supervisor: دعوة معالج فقط بدون عرض القائمة
 }
 
 type Matrix = Record<Role, Partial<Record<Screen, Access>>>
@@ -50,7 +51,8 @@ export const MATRIX: Matrix = {
     patients: m('limited', 'no-identity'), 'patient-profile': m('limited', 'no-identity'),
     clinical: m('full'), programs: m('full'), 'red-flags': m('full'),
     reports: m('limited', 'clinical'), tickets: m('read'), users: m('full'),
-    // الـAPI يمنع: المعالجون، طلبات الملفات → denied
+    // الـAPI يمنع قائمة المعالجين وطلبات الملفات؛ يسمح له فقط بدعوة معالج عبر POST /admin/users
+    therapists: m('limited', 'invite-only'),
   },
   finance_partner: {
     dashboard: m('limited', 'earnings'),
@@ -104,3 +106,13 @@ export const NAV: { screen: Screen; label: string; icon: string }[] = [
   { screen: 'audit', label: 'سجل التدقيق', icon: 'shield' },
   { screen: 'settings', label: 'الإعدادات', icon: 'gear' },
 ]
+
+/** أدوار فريق الإدارة التي يسمح الباك اند لكل فاعل بدعوتها (StaffAccountService::CREATABLE_ROLES، بدون المعالج) */
+export const INVITABLE_STAFF_ROLES: Partial<Record<Role, Role[]>> = {
+  super_admin: ['admin', 'clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager'],
+  admin: ['clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager'],
+}
+
+/** دعوة معالج (role=therapist + therapist.*) من شاشة المعالجين */
+export const THERAPIST_INVITERS: Role[] = ['super_admin', 'admin', 'clinical_supervisor']
+export const canInviteTherapist = (role: Role | null | undefined) => !!role && THERAPIST_INVITERS.includes(role)

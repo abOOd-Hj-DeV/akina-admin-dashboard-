@@ -24,7 +24,8 @@ function Unauthorized() {
 }
 
 export default function Guard({ screen, children }: { screen: Screen; children: ReactNode }) {
-  const { role } = useAuth()
+  const { role, ready } = useAuth()
+  if (!ready) return null
   if (!role) return <Navigate to="/login" replace />
   if (access(role, screen).level === 'denied') return <Unauthorized />
   return <>{children}</>

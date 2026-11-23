@@ -5,10 +5,10 @@
 [build.environment]
   NODE_VERSION = "22"
 
-# The test backend is HTTP-only, so the host proxies /api to it on the same origin.
+# Same-origin /api proxy to the production backend on Render.
 [[redirects]]
   from = "/api/*"
-  to = "http://api.sakinatherapy.app/api/:splat"
+  to = "https://sakina-api-po5b.onrender.com/api/:splat"
   status = 200
   force = true
 

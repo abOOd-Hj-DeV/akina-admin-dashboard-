@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
-import { access } from '../auth/permissions'
+import { access, canInviteTherapist } from '../auth/permissions'
 import { listTherapists } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, PageHeader, SearchBar, Table } from '../components/ui'
+import InviteUserForm from '../components/InviteUserForm'
 
 export default function Therapists() {
   const { role } = useAuth()
@@ -10,11 +12,24 @@ export default function Therapists() {
   const a = role ? access(role, 'therapists') : { level: 'denied' as const }
   const readOnly = a.level === 'read'
   const opsOnly = a.mask === 'ops' // admin: تشغيل — بدون قرارات الاعتماد السريرية؟ نقول: تعطيل/تعليق مسموح، اعتماد للمدير الرئيسي
+  // المشرف السريري: الـAPI يسمح له بدعوة معالج فقط، بدون عرض القائمة
+  const inviteOnly = a.mask === 'invite-only'
+  const canInvite = canInviteTherapist(role)
+  const [inviting, setInviting] = useState(false)
+  const [sent, setSent] = useState(false)
 
   return (
     <>
-      <PageHeader title="إدارة المعالجين" sub={readOnly ? 'قراءة فقط حسب صلاحياتك' : undefined} />
-      <Card className="p-4">
+      <PageHeader
+        title="إدارة المعالجين"
+        sub={inviteOnly ? 'دعوة معالج جديد عبر واتساب' : readOnly ? 'قراءة فقط حسب صلاحياتك' : undefined}
+        action={canInvite ? <Btn tone="primary" onClick={() => { setInviting((v) => !v); setSent(false) }}>+ دعوة معالج</Btn> : undefined}
+      />
+      {sent && <p role="status" className="mb-3 rounded-xl bg-[#c7e4e7]/50 px-4 py-2 text-[13px] font-medium text-[#135e66]">أُرسلت الدعوة عبر واتساب. سيظهر المعالج بعد تفعيل حسابه واعتماده.</p>}
+      {canInvite && inviting && (
+        <InviteUserForm roles={['therapist']} onCancel={() => setInviting(false)} onDone={() => { setInviting(false); setSent(true) }} />
+      )}
+      {!inviteOnly && <Card className="p-4">
         <SearchBar placeholder="ابحث بالاسم، رقم الترخيص..." />
         <div className="mt-4">
           <Table cols={['الرقم', 'الاسم', 'الحالة', 'المرضى', 'التقييم', 'تاريخ الانضمام', 'إجراءات']}>
@@ -53,7 +68,7 @@ export default function Therapists() {
             ))}
           </Table>
         </div>
-      </Card>
+      </Card>}
     </>
   )
 }
