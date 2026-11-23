@@ -59,7 +59,7 @@ src/
 ## الربط بالباك اند
 
 الملف `.env` المتتبَّع يربط اللوحة افتراضياً بباك اند الاختبار المشترك
-`http://api.sakinatherapy.app` عبر بروكسي Vite: `npm run dev` و`npm run preview`
+`https://sakina-api-po5b.onrender.com` عبر بروكسي Vite: `npm run dev` و`npm run preview`
 يمرّران `/api` إليه على نفس الأصل (`VITE_API_URL` فارغ + `VITE_API_MOCK=false`).
 السيرفر HTTP فقط (لبيانات وهمية فقط)، والمتصفحات تفرض HTTPS على نطاقات `.app`،
 فلا يمكن الاتصال به مباشرة من المتصفح. الرفع الثابت (static) بلا بروكسي Vite
