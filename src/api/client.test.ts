@@ -106,6 +106,19 @@ describe('تخزين التوكنات والتجديد والمهلة', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     await assertion
   })
+  it('جسم رد متوقف بعد الرؤوس ينتهي أيضاً بخطأ timeout', async () => {
+    vi.useFakeTimers()
+    fetchMock.mockImplementation(async (_u: string, init: RequestInit) => {
+      const body = new ReadableStream({
+        start(ctrl) { init.signal?.addEventListener('abort', () => ctrl.error(new DOMException('aborted', 'AbortError'))) },
+      })
+      return new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+    const p = c.api.get('/api/v1/stalled')
+    const assertion = expect(p).rejects.toMatchObject({ code: 'timeout' })
+    await vi.advanceTimersByTimeAsync(60_000)
+    await assertion
+  })
   it('غلاف الخطأ يحفظ code و meta و errors', async () => {
     fetchMock.mockResolvedValueOnce(json({ message: 'wait', code: 'otp_cooldown', errors: { otp: ['wait'] }, meta: { retry_after: 42 } }, 429))
     await expect(c.api.post('/api/v1/auth/login/2fa/resend', {}, false))

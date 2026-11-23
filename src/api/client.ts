@@ -66,13 +66,19 @@ export interface LaravelPaginator<T> {
 
 interface TokenPair { access_token: string; refresh_token: string }
 
-async function send(method: string, path: string, headers: Record<string, string>, body?: BodyInit): Promise<Response> {
+/** يرسل الطلب ويقرأ الجسم ضمن نفس المهلة (رؤوس سريعة + جسم متوقف = timeout) */
+async function send(method: string, path: string, headers: Record<string, string>, body?: BodyInit): Promise<{ res: Response; json: unknown }> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS)
+  const timeout = () => new ApiError(0, 'انتهت مهلة الاتصال بالخادم. حاول مرة أخرى.', undefined, 'timeout')
   try {
-    return await fetch(`${API_URL}${path}`, { method, headers, body, signal: ctrl.signal })
+    const res = await fetch(`${API_URL}${path}`, { method, headers, body, signal: ctrl.signal })
+    const json = res.status === 204 ? null : await res.json().catch(() => null)
+    if (ctrl.signal.aborted) throw timeout()
+    return { res, json }
   } catch (e) {
-    if (ctrl.signal.aborted) throw new ApiError(0, 'انتهت مهلة الاتصال بالخادم. حاول مرة أخرى.', undefined, 'timeout')
+    if (e instanceof ApiError) throw e
+    if (ctrl.signal.aborted) throw timeout()
     throw new ApiError(0, 'تعذّر الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.', undefined, 'network', { cause: String(e) })
   } finally {
     clearTimeout(timer)
@@ -96,9 +102,9 @@ export function refreshSession(): Promise<boolean> {
   if (!refresh_token) return Promise.resolve(false)
   refreshing = (async () => {
     try {
-      const res = await send('POST', '/api/v1/auth/refresh',
+      const { res, json: body } = await send('POST', '/api/v1/auth/refresh',
         { Accept: 'application/json', 'Content-Type': 'application/json' }, JSON.stringify({ refresh_token }))
-      const json = (await res.json().catch(() => null)) as TokenPair | null
+      const json = body as TokenPair | null
       if (!res.ok || !json?.access_token) { tokenStore.clear(); return false }
       tokenStore.set(json.access_token, json.refresh_token)
       return true
@@ -130,8 +136,7 @@ async function request<T>(
     headers['Content-Type'] = 'application/json'
     payload = JSON.stringify(body)
   }
-  const res = await send(method, path, headers, payload)
-  const json = res.status === 204 ? null : await res.json().catch(() => null)
+  const { res, json } = await send(method, path, headers, payload)
   if (!res.ok) {
     if (res.status === 401 && !NO_RETRY.test(path)) {
       if (!retried && tokenStore.getRefresh() && (await refreshSession())) {
