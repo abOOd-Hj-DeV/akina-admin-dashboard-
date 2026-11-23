@@ -99,9 +99,6 @@ export default function Shell() {
               <strong>{userName || 'مشرف سكينة'}</strong>
               <small>{ROLE_LABELS[role]}</small>
             </span>
-            <NavLink to="/account" className="profile-gear" aria-label="حسابي" title="حسابي — كلمة المرور والجلسات">
-              <Icon name="lock" size={16} />
-            </NavLink>
             {canView(role, 'settings') && (
               <NavLink to="/settings" className="profile-gear" aria-label="الإعدادات">
                 <Icon name="gear" size={16} />
@@ -157,6 +154,9 @@ export default function Shell() {
                 </div>
               )}
             </div>
+            <NavLink to="/account" className="icon-button" aria-label="حسابي" title="حسابي — كلمة المرور والجلسات">
+              <Icon name="lock" />
+            </NavLink>
             <button
               type="button"
               className="icon-button logout-button"
