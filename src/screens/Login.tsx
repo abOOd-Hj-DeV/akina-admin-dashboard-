@@ -194,7 +194,7 @@ export default function Login() {
         <div className="mt-4 flex items-center justify-between text-[12px]">
           <label className="flex items-center gap-1.5 text-[#657381]"><input type="checkbox" /> تذكرني</label>
           {!API_MOCK && <Link to="/activate" className="font-medium text-[#1d919e]">تفعيل حساب جديد</Link>}
-          <Link to="/forgot-password" className="font-medium text-[#1d919e]">استعادة كلمة المرور</Link>
+          {!API_MOCK && <Link to="/forgot-password" className="font-medium text-[#1d919e]">استعادة كلمة المرور</Link>}
         </div>
         {API_MOCK && (
           <>

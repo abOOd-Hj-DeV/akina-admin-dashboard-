@@ -43,6 +43,10 @@ describe('الشاشات', () => {
     expect(html).toContain('جارٍ استعادة الجلسة')
     expect(html).not.toContain('رمز الدولة')
   })
+  it('وضع العرض التجريبي لا يعرض استعادة كلمة المرور الحقيقية', async () => {
+    vi.stubEnv('VITE_API_MOCK', 'true')
+    expect(await render(() => import('./Login'))).not.toContain('/forgot-password')
+  })
   it('استعادة كلمة المرور: تبدأ بحقل الرقم (سوريا افتراضياً)', async () => {
     const html = await render(() => import('./ForgotPassword'))
     expect(html).toContain('استعادة كلمة المرور')
