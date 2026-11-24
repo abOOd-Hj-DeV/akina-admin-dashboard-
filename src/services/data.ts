@@ -60,7 +60,8 @@ const FLAG_LEVEL = { high: 'حرج', medium: 'عالي', low: 'متوسط' } as 
 const mapFlag = (f: ApiRedFlag): RedFlag => ({
   id: f.id,
   patientId: f.patient_id,
-  patientName: f.patient_id.slice(0, 8),
+  patientName: f.patient_name || 'مريض',
+  assignedTo: f.assigned_to,
   therapistName: '—',
   reason: f.description,
   level: f.status === 'resolved' ? 'تم الحل' : (FLAG_LEVEL[f.priority] ?? 'متوسط'),
@@ -129,6 +130,13 @@ export const listWithdrawals = (): Promise<Withdrawal[]> =>
 
 export const listRedFlags = () =>
   API_MOCK ? wait(mock.redFlags) : adminApi.redFlags().then(r => r.data.map(mapFlag))
+
+export const countOpenRedFlags = () =>
+  API_MOCK ? wait(mock.redFlags.filter(f => f.level !== 'تم الحل').length)
+    : adminApi.redFlagCounts().then(r => Object.values(r.data.open).reduce((sum, count) => sum + count, 0))
+
+export const listRedFlagAssignees = () =>
+  API_MOCK ? wait([]) : adminApi.redFlagAssignees().then(r => r.data)
 
 export const listDocRequests = () =>
   API_MOCK ? wait(mock.docRequests) : adminApi.documents().then(r => r.data.map(mapDoc))

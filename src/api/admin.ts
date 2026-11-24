@@ -4,7 +4,7 @@ import type { LaravelPaginator, Page } from './client'
 import type {
   ApiAdminPatient, ApiAdminPatientDetail, ApiAdminTherapist, ApiAdminUser,
   ApiAuditEntry, ApiDocument, ApiFaq, ApiOverview, ApiPayment,
-  ApiProgram, ApiRedFlag, ApiRedFlagStats, ApiSupportTicket, ApiWithdrawal, CreateUserBody,
+  ApiProgram, ApiRedFlag, ApiRedFlagCounts, ApiRedFlagStats, ApiSupportTicket, ApiWithdrawal, CreateUserBody,
 } from './types'
 
 const qs = (params: Record<string, string | number | boolean | undefined>) => {
@@ -45,6 +45,8 @@ export const adminApi = {
   redFlags: (f: { status?: string; priority?: string; type?: string; page?: number } = {}) =>
     api.get<Page<ApiRedFlag> & { stats?: ApiRedFlagStats }>(`/api/v1/admin/red-flags${qs(f)}`),
   redFlag: (id: string) => api.get<{ data: ApiRedFlag }>(`/api/v1/admin/red-flags/${id}`),
+  redFlagCounts: () => api.get<{ data: ApiRedFlagCounts }>('/api/v1/admin/red-flags/stats'),
+  redFlagAssignees: () => api.get<{ data: { id: string; name: string }[] }>('/api/v1/admin/red-flags/assignees'),
   assignRedFlag: (id: string, user_id: string) =>
     api.post(`/api/v1/admin/red-flags/${id}/assign`, { user_id }),
   setRedFlagStatus: (id: string, status: string, action_taken?: string) =>
@@ -91,12 +93,13 @@ export const adminApi = {
 
   // المستخدمون — + clinical_supervisor
   users: (f: { role?: string; search?: string; page?: number } = {}) =>
-    api.get<Page<ApiAdminUser>>(`/api/v1/admin/users${qs(f)}`),
+    api.get<LaravelPaginator<ApiAdminUser>>(`/api/v1/admin/users${qs(f)}`),
   createUser: (body: CreateUserBody) =>
     api.post<{ message: string; user: ApiAdminUser; invitation_expires_at: string }>('/api/v1/admin/users', body),
   setUserActive: (id: string, is_active: boolean) =>
     api.patch(`/api/v1/admin/users/${id}/active`, { is_active }),
   resendInvitation: (id: string) => api.post(`/api/v1/admin/users/${id}/invitation/resend`),
+  cancelInvitation: (id: string) => api.del(`/api/v1/admin/users/${id}/invitation`),
 
   // السجل — admin, super_admin
   audit: (f: { action?: string; actor_id?: string; page?: number } = {}) =>

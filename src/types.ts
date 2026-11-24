@@ -59,6 +59,7 @@ export interface Payment {
 }
 
 export interface RedFlag {
+  assignedTo?: string | null
   id: string
   patientId: string
   patientName: string

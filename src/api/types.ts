@@ -91,6 +91,7 @@ export interface ApiPayment {
 export interface ApiRedFlag {
   id: string
   patient_id: string
+  patient_name?: string | null
   type: 'safety' | string
   priority: 'high' | 'medium' | 'low'
   status: 'open' | 'assigned' | 'resolved' | string
@@ -106,6 +107,8 @@ export interface ApiRedFlag {
 export interface ApiRedFlagStats {
   total: number; open: number; resolved: number; high_priority: number; by_type: Record<string, number>
 }
+
+export type ApiRedFlagCounts = Record<'open' | 'resolved', Record<ApiRedFlag['priority'], number>>
 
 export interface ApiAdminTherapist {
   id: string
@@ -204,6 +207,7 @@ export interface ApiAdminUser {
   role: ApiRole
   is_active: boolean
   activated?: boolean
+  pending_invitation?: boolean
   last_login?: string | null
   created_at: string
 }
