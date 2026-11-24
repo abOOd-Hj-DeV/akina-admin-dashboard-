@@ -21,18 +21,22 @@ export interface Access {
     | 'escalate'      // support: رفع للمدير
     | 'clinical'      // supervisor: التقارير السريرية فقط
     | 'earnings'      // finance: تقارير أرباحه فقط
+    | 'invite-only'   // supervisor: دعوة معالج فقط بدون عرض القائمة
 }
 
 type Matrix = Record<Role, Partial<Record<Screen, Access>>>
 
 const m = (level: AccessLevel, mask?: Access['mask']): Access => ({ level, mask })
 
+// المصفوفة مطابقة لعقد الباك اند (مرجعية API — الأدوار المسموحة لكل endpoint)
+// مع قناع الـPDF للحقول المخفية (مثل هوية المريض للمشرف) على مستوى الواجهة.
 export const MATRIX: Matrix = {
   super_admin: {
     dashboard: m('full'), patients: m('full'), 'patient-profile': m('full'),
     therapists: m('full'), clinical: m('read'), payments: m('full'),
     programs: m('full'), 'doc-requests': m('full'), 'red-flags': m('full'),
     reports: m('full'), audit: m('full'), settings: m('full'), tickets: m('full'),
+    faqs: m('full'), users: m('full'),
   },
   admin: {
     dashboard: m('limited', 'ops'),
@@ -40,27 +44,29 @@ export const MATRIX: Matrix = {
     therapists: m('limited', 'ops'),
     payments: m('full'), programs: m('read'), 'doc-requests': m('full'),
     'red-flags': m('limited', 'alert'), reports: m('limited', 'ops'),
-    audit: m('read'), tickets: m('read'),
+    audit: m('read'), tickets: m('read'), faqs: m('full'), users: m('full'),
   },
   clinical_supervisor: {
     dashboard: m('limited', 'clinical'),
     patients: m('limited', 'no-identity'), 'patient-profile': m('limited', 'no-identity'),
-    therapists: m('read'), clinical: m('full'), programs: m('full'),
-    'doc-requests': m('read'), 'red-flags': m('full'),
-    reports: m('limited', 'clinical'), tickets: m('read'),
+    clinical: m('full'), programs: m('full'), 'red-flags': m('full'),
+    reports: m('limited', 'clinical'), tickets: m('read'), users: m('full'),
+    // الـAPI يمنع قائمة المعالجين وطلبات الملفات؛ يسمح له فقط بدعوة معالج عبر POST /admin/users
+    therapists: m('limited', 'invite-only'),
   },
   finance_partner: {
     dashboard: m('limited', 'earnings'),
     payments: m('limited', 'own'), reports: m('limited', 'earnings'),
+    // الـAPI يمنحه أيضاً /admin/withdrawals — تُعرض ضمن شاشة المدفوعات
   },
   support_agent: {
     dashboard: m('limited', 'status-only'),
-    patients: m('limited', 'status-only'),
-    'doc-requests': m('limited', 'escalate'), 'red-flags': m('limited', 'alert'),
-    tickets: m('full'),
+    'red-flags': m('limited', 'alert'), tickets: m('full'),
+    // الـAPI يمنع: المرضى، طلبات الملفات، المعالجون → denied
   },
   content_manager: {
-    programs: m('limited', 'non-therapeutic'),
+    faqs: m('full'),
+    // الـAPI يمنحه الأسئلة الشائعة فقط — مكتبة البرامج ممنوعة عنه
   },
 }
 
@@ -71,7 +77,7 @@ export const canView = (role: Role, screen: Screen) => access(role, screen).leve
 
 /** أول شاشة متاحة للدور — وجهة إعادة التوجيه بعد الدخول ولصفحة غير مصرح */
 export const homeFor = (role: Role): Screen => {
-  if (role === 'content_manager') return 'programs'
+  if (role === 'content_manager') return 'faqs'
   return 'dashboard'
 }
 
@@ -95,6 +101,18 @@ export const NAV: { screen: Screen; label: string; icon: string }[] = [
   { screen: 'doc-requests', label: 'طلبات الملفات', icon: 'file' },
   { screen: 'reports', label: 'التقارير', icon: 'chart' },
   { screen: 'tickets', label: 'الدعم الفني', icon: 'ticket' },
+  { screen: 'faqs', label: 'الأسئلة الشائعة', icon: 'list' },
+  { screen: 'users', label: 'إدارة المستخدمين', icon: 'users' },
   { screen: 'audit', label: 'سجل التدقيق', icon: 'shield' },
   { screen: 'settings', label: 'الإعدادات', icon: 'gear' },
 ]
+
+/** أدوار فريق الإدارة التي يسمح الباك اند لكل فاعل بدعوتها (StaffAccountService::CREATABLE_ROLES، بدون المعالج) */
+export const INVITABLE_STAFF_ROLES: Partial<Record<Role, Role[]>> = {
+  super_admin: ['admin', 'clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager'],
+  admin: ['clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager'],
+}
+
+/** دعوة معالج (role=therapist + therapist.*) من شاشة المعالجين */
+export const THERAPIST_INVITERS: Role[] = ['super_admin', 'admin', 'clinical_supervisor']
+export const canInviteTherapist = (role: Role | null | undefined) => !!role && THERAPIST_INVITERS.includes(role)

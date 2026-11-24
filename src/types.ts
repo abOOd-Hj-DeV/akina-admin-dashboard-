@@ -21,6 +21,8 @@ export type Screen =
   | 'audit'
   | 'settings'
   | 'tickets'
+  | 'faqs'
+  | 'users'
 
 export interface Patient {
   id: string
