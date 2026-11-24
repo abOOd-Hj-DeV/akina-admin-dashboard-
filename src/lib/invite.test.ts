@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { ApiError } from '../api/client'
+import { describeAuthError } from '../api/errors'
 import { buildInvite, mapInviteErrors, splitLanguages } from './invite'
 
 const base = { name: ' د. ريم ', email: 'reem@sakina.app', whatsapp: '0983321260', country: 'SY' as const }
@@ -33,6 +35,11 @@ describe('دعوة مستخدم (POST /admin/users)', () => {
   it('أخطاء الخادم تُوزّع على الحقول', () => {
     expect(mapInviteErrors({ email: 'taken', 'therapist.languages.0': 'bad' }, 'x')).toEqual({ email: 'taken', 'therapist.languages': 'bad' })
     expect(mapInviteErrors({}, 'Forbidden')).toEqual({ form: 'Forbidden' })
+  })
+  it('رقم غير مسجل على واتساب → رسالة عربية تحت حقل الرقم', () => {
+    const e = new ApiError(422, 'Not registered', { whatsapp_number: ['Not registered'] }, 'whatsapp_not_registered')
+    const d = describeAuthError(e, 'fallback')
+    expect(mapInviteErrors(d.fieldErrors ?? {}, d.message)).toEqual({ whatsapp_number: 'هذا الرقم غير مسجّل على واتساب.' })
   })
   it('splitLanguages يقبل الفاصلة العربية والإنجليزية', () => {
     expect(splitLanguages('a، b,c')).toEqual(['a', 'b', 'c'])

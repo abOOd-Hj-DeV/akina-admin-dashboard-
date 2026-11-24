@@ -3,11 +3,12 @@ import { ApiError } from './client'
 
 export type AuthErrorCode =
   | 'otp_invalid' | 'otp_expired' | 'otp_exhausted' | 'otp_cooldown' | 'otp_send_failed'
-  | 'password_reused' | 'phone_invalid' | 'therapist_pending_approval'
+  | 'password_reused' | 'phone_invalid' | 'therapist_pending_approval' | 'whatsapp_not_registered'
 
 const CODE_FIELD: Record<AuthErrorCode, string | undefined> = {
   otp_invalid: 'otp', otp_expired: 'otp', otp_exhausted: 'otp', otp_cooldown: 'otp', otp_send_failed: 'otp',
   password_reused: 'password', phone_invalid: 'whatsapp_number', therapist_pending_approval: undefined,
+  whatsapp_not_registered: 'whatsapp_number',
 }
 
 const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
@@ -27,6 +28,7 @@ function codeMessage(code: AuthErrorCode, meta: Record<string, unknown>): string
     case 'otp_send_failed': return 'تعذّر إرسال الرمز على واتساب. حاول بعد قليل.'
     case 'password_reused': return 'كلمة المرور الجديدة يجب أن تختلف عن الحالية.'
     case 'phone_invalid': return 'رقم واتساب غير صحيح.'
+    case 'whatsapp_not_registered': return 'هذا الرقم غير مسجّل على واتساب.'
     case 'therapist_pending_approval': return 'حساب المعالج بانتظار موافقة الإدارة.'
   }
 }
