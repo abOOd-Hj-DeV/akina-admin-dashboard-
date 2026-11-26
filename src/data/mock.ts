@@ -1,4 +1,5 @@
 import type { AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Therapist, Ticket } from '../types'
+import { ApiError } from '../api/client'
 
 export const patients: Patient[] = [
   { id: 'P-1247', name: 'أحمد م.', therapistId: 'T-042', status: 'نشط', subscription: 'باقة 8 أسابيع', progress: 40, compliance: 85, lastActivity: 'منذ ساعة' },
@@ -28,11 +29,91 @@ export const payments: Payment[] = [
 ]
 
 export const redFlags: RedFlag[] = [
-  { id: 'RF-047', patientId: 'P-1156', patientName: 'محمد ي.', therapistName: 'د. نور حسن', reason: 'انخفاض حاد في تسجيل المزاج (من 7 إلى 2 في 3 أيام)', level: 'عالي', detectedAt: '07:32 18-11-2025' },
-  { id: 'RF-046', patientId: 'P-1134', patientName: 'خالد س.', therapistName: 'د. سارة أحمد', reason: 'ذكر أفكار إيذاء النفس في رسالة للمعالج', level: 'حرج', detectedAt: '06:15 18-11-2025' },
-  { id: 'RF-043', patientId: 'P-1102', patientName: 'سارة ر.', therapistName: 'د. محمد الخالدي', reason: 'عدم حضور 3 جلسات متتالية مع تقييد التواصل', level: 'متوسط', detectedAt: '21:40 17-11-2025' },
-  { id: 'RF-039', patientId: 'P-1044', patientName: 'يوسف ن.', therapistName: 'د. محمد الخالدي', reason: 'تنبيه مزاج منخفض — تمت المعالجة وإغلاق الحالة', level: 'تم الحل', detectedAt: '10:05 16-11-2025' },
+  {
+    id: 'RF-047',
+    patientId: 'P-1156',
+    patientName: 'محمد ي.',
+    patientWhatsapp: '+963944123456',
+    type: 'safety',
+    priority: 'high',
+    status: 'open',
+    assignedTo: 'staff-1',
+    assigneeName: 'د. سارة أحمد',
+    therapistName: 'د. نور حسن',
+    reason: 'أشار المريض في السؤال التاسع من PHQ-9 إلى أفكار لإيذاء النفس.',
+    level: 'حرج',
+    assessmentScore: 27,
+    onHold: true,
+    holdSince: '2026-04-18T07:10:00.000Z',
+    reactivationRequestedAt: '2026-04-18T07:32:00.000Z',
+    actionTaken: 'د. سارة أحمد — 2026-04-18T07:25:00.000Z: تمت مراجعة الخطة الأولية.',
+    detectedAt: '2026-04-18T07:00:00.000Z',
+  },
+  {
+    id: 'RF-046',
+    patientId: 'P-1134',
+    patientName: 'خالد س.',
+    patientWhatsapp: '+963944654321',
+    type: 'low_mood',
+    priority: 'medium',
+    status: 'open',
+    assignedTo: null,
+    assigneeName: null,
+    therapistName: 'د. سارة أحمد',
+    reason: 'درجة PHQ-9 مرتفعة.',
+    level: 'عالي',
+    assessmentScore: 18,
+    onHold: false,
+    holdSince: null,
+    reactivationRequestedAt: null,
+    actionTaken: null,
+    detectedAt: '2026-04-17T15:15:00.000Z',
+  },
+  {
+    id: 'RF-043',
+    patientId: 'P-1102',
+    patientName: 'سارة ر.',
+    patientWhatsapp: null,
+    type: 'non_compliance',
+    priority: 'low',
+    status: 'open',
+    assignedTo: null,
+    assigneeName: null,
+    therapistName: null,
+    reason: 'عدم الالتزام بالخطة العلاجية.',
+    level: 'متوسط',
+    assessmentScore: null,
+    onHold: false,
+    holdSince: null,
+    reactivationRequestedAt: null,
+    actionTaken: null,
+    detectedAt: '2026-04-16T19:40:00.000Z',
+  },
 ]
+
+export function applyRedFlagDecision(
+  id: string,
+  decision: 'reactivate' | 'keep_hold' | 'close',
+  note: string,
+): RedFlag {
+  const flag = redFlags.find(item => item.id === id)
+  if (!flag) throw new Error('الحالة غير متاحة.')
+  if (flag.status === 'resolved') {
+    throw new ApiError(409, 'الحالة محلولة ولا يمكن اتخاذ قرار جديد.', undefined, 'decision_not_applicable')
+  }
+
+  flag.actionTaken = [flag.actionTaken, note].filter(Boolean).join('\n\n')
+  if (decision === 'reactivate' || decision === 'close') {
+    flag.status = 'resolved'
+    flag.level = 'تم الحل'
+  }
+  if (decision === 'reactivate') {
+    flag.onHold = false
+    flag.holdSince = null
+  }
+  if (decision !== 'close') flag.reactivationRequestedAt = null
+  return flag
+}
 
 export const auditLog: AuditEntry[] = [
   { time: '2025-11-18 09:42:15', user: 'admin@platform.com', userRole: 'Super Admin', action: 'تعديل صلاحيات', target: 'User: support@platform.com', details: 'تغيير الدور من Support Agent إلى Admin', ip: '192.168.1.45' },

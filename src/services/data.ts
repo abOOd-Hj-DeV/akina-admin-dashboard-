@@ -57,14 +57,24 @@ const mapPayment = (p: ApiPayment): Payment => ({
 })
 
 const FLAG_LEVEL = { high: 'حرج', medium: 'عالي', low: 'متوسط' } as const
-const mapFlag = (f: ApiRedFlag): RedFlag => ({
+export const mapFlag = (f: ApiRedFlag): RedFlag => ({
   id: f.id,
   patientId: f.patient_id,
   patientName: f.patient_name || 'مريض',
+  patientWhatsapp: f.patient_whatsapp ?? null,
+  type: f.type,
+  priority: f.priority,
+  status: f.status === 'resolved' ? 'resolved' : f.status === 'assigned' ? 'assigned' : 'open',
   assignedTo: f.assigned_to,
-  therapistName: '—',
+  assigneeName: f.assignee_name ?? null,
+  therapistName: f.therapist_name ?? null,
   reason: f.description,
   level: f.status === 'resolved' ? 'تم الحل' : (FLAG_LEVEL[f.priority] ?? 'متوسط'),
+  assessmentScore: f.assessment_score ?? null,
+  onHold: f.on_hold,
+  holdSince: f.hold_since,
+  reactivationRequestedAt: f.reactivation_requested_at,
+  actionTaken: f.action_taken,
   detectedAt: f.created_at,
 })
 
@@ -135,9 +145,6 @@ export const countOpenRedFlags = () =>
   API_MOCK ? wait(mock.redFlags.filter(f => f.level !== 'تم الحل').length)
     : adminApi.redFlagCounts().then(r => Object.values(r.data.open).reduce((sum, count) => sum + count, 0))
 
-export const listRedFlagAssignees = () =>
-  API_MOCK ? wait([]) : adminApi.redFlagAssignees().then(r => r.data)
-
 export const listDocRequests = () =>
   API_MOCK ? wait(mock.docRequests) : adminApi.documents().then(r => r.data.map(mapDoc))
 
@@ -199,8 +206,11 @@ export const reviewDocument = (id: string, action: 'approve' | 'reject', note?: 
 export const setTicketStatus = (id: string, status: string) =>
   API_MOCK ? wait(undefined) : adminApi.setTicketStatus(id, status)
 
-export const assignRedFlag = (id: string, assigneeId: string) =>
-  API_MOCK ? wait(undefined) : adminApi.assignRedFlag(id, assigneeId)
-
-export const setRedFlagStatus = (id: string, status: string, action?: string) =>
-  API_MOCK ? wait(undefined) : adminApi.setRedFlagStatus(id, status, action)
+export const decideRedFlag = (
+  id: string,
+  decision: 'reactivate' | 'keep_hold' | 'close',
+  note: string,
+) =>
+  API_MOCK
+    ? wait(mock.applyRedFlagDecision(id, decision, note))
+    : adminApi.decideRedFlag(id, { decision, note }).then(response => response.data)

@@ -1,67 +1,96 @@
-import { beforeEach, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import RedFlags from './RedFlags'
-import type { Role } from '../types'
+import { describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../api/client'
+import { applyRedFlagDecision, redFlags } from '../data/mock'
+import { RedFlagCard, RedFlagDecisionForm } from './RedFlags'
+import type { RedFlag } from '../types'
 
-const mocks = vi.hoisted(() => ({
-  role: 'super_admin' as Role,
-  list: vi.fn(),
-  counts: vi.fn(),
-  assignees: vi.fn(),
-  requests: [] as unknown[],
-  loading: false,
-  error: null as Error | null,
-}))
-vi.mock('../auth/AuthContext', () => ({ useAuth: () => ({ role: mocks.role }) }))
-vi.mock('../services/data', () => ({
-  listRedFlags: mocks.list, countOpenRedFlags: mocks.counts, listRedFlagAssignees: mocks.assignees,
-  assignRedFlag: vi.fn(), setRedFlagStatus: vi.fn(),
-}))
-vi.mock('../hooks/useAsync', () => ({
-  useAsync: (request: unknown) => {
-    mocks.requests.push(request)
-    if (request === mocks.counts) return { data: mocks.loading || mocks.error ? undefined : 6, loading: mocks.loading, error: mocks.error }
-    if (request === mocks.list) return { data: [{
-      id: 'flag-1', patientId: 'patient-1', patientName: 'Patient Name', level: 'حرج', reason: 'private details',
-    }] }
-    return {}
-  },
-}))
+const heldFlag: RedFlag = {
+  id: 'flag-private-id',
+  patientId: 'patient-private-id',
+  patientName: 'مريم الاختبار',
+  patientWhatsapp: '+963944123456',
+  type: 'safety',
+  priority: 'high',
+  status: 'open',
+  assignedTo: 'assignee-id',
+  assigneeName: 'د. سارة',
+  therapistName: 'د. ليلى',
+  reason: 'أشار المريض إلى أفكار لإيذاء النفس.',
+  level: 'حرج',
+  assessmentScore: 27,
+  onHold: true,
+  holdSince: '2026-04-18T07:10:00.000Z',
+  reactivationRequestedAt: '2026-04-18T07:32:00.000Z',
+  actionTaken: 'تمت مراجعة الحالة.\nتواصل الفريق مع المريض.',
+  detectedAt: '2026-04-18T07:00:00.000Z',
+}
 
-beforeEach(() => {
-  mocks.requests = []
-  mocks.loading = false
-  mocks.error = null
-})
+describe('واجهة حالات الخطر', () => {
+  it('يعرض بطاقة التعليق وطلب إعادة التفعيل دون معرّفات المريض', () => {
+    const markup = renderToStaticMarkup(
+      <RedFlagCard flag={heldFlag} full onDecision={vi.fn(async () => undefined)} />,
+    )
 
-it.each(['support_agent', 'admin'] as const)('%s receives only the open case count', role => {
-  mocks.role = role
-  const html = renderToStaticMarkup(<RedFlags />)
-  expect(html).toContain('6 حالة نشطة')
-  expect(html).not.toContain('private details')
-  expect(html).not.toContain('تعيين متابعة')
-  expect(mocks.requests).toContain(mocks.counts)
-  expect(mocks.requests).not.toContain(mocks.list)
-  expect(mocks.requests).not.toContain(mocks.assignees)
-})
+    expect(markup).toContain('مريم الاختبار')
+    expect(markup).toContain('أفكار لإيذاء النفس')
+    expect(markup).toContain('الحساب معلّق')
+    expect(markup).toContain('طلب إعادة تفعيل')
+    expect(markup).toContain('الدرجة: 27')
+    expect(markup).toContain('د. ليلى')
+    expect(markup).toContain('تواصل عبر واتساب')
+    expect(markup).toContain('href="https://wa.me/963944123456"')
+    expect(markup).not.toContain(heldFlag.id)
+    expect(markup).not.toContain(heldFlag.patientId)
+    expect(markup).toContain('whitespace-pre-wrap')
+  })
 
-it('does not claim zero when the counts request is pending or fails', () => {
-  mocks.role = 'support_agent'
-  mocks.loading = true
-  expect(renderToStaticMarkup(<RedFlags />)).toContain('جارٍ تحميل عدد الحالات النشطة')
-  mocks.loading = false
-  mocks.error = new Error('unavailable')
-  const html = renderToStaticMarkup(<RedFlags />)
-  expect(html).toContain('تعذّر تحميل عدد الحالات النشطة')
-  expect(html).not.toContain('0 حالة نشطة')
-})
+  it('يعرض قراري إعادة التفعيل والإبقاء وملاحظة مطلوبة قبل الإرسال', () => {
+    const markup = renderToStaticMarkup(
+      <RedFlagDecisionForm onHold onSubmit={vi.fn(async () => undefined)} onCancel={vi.fn()} />,
+    )
 
-it('shows a real patient name and labels unwired emergency actions as unavailable', () => {
-  mocks.role = 'super_admin'
-  const html = renderToStaticMarkup(<RedFlags />)
-  expect(html).toContain('Patient Name')
-  expect(html).toContain('توثيق الاتصال وحلّ التنبيه')
-  expect(html).toContain('تعيين متابعة')
-  expect(html).toMatch(/title="[^"]+"><button[^>]+disabled[^>]*>إحالة لجلسة طارئة/)
-  expect(html).toMatch(/title="[^"]+"><button[^>]+disabled[^>]*>تحويل للطوارئ/)
+    expect(markup).toContain('إعادة تفعيل الحساب')
+    expect(markup).toContain('إبقاء الحساب معلّقًا')
+    expect(markup).toContain('سجّل ما تم في التواصل مع المريض. تُحفظ الملاحظة في السجل.')
+    expect(markup).toContain('disabled=""')
+  })
+
+  it('يعرض سجل الحالة المحلولة ويخفي إجراءات القرار', () => {
+    const resolvedFlag = {
+      ...heldFlag,
+      status: 'resolved' as const,
+      level: 'تم الحل' as const,
+      onHold: false,
+      actionTaken: 'تمت إعادة تفعيل الحساب بعد المراجعة.',
+    }
+    const markup = renderToStaticMarkup(
+      <RedFlagCard flag={resolvedFlag} full onDecision={vi.fn(async () => undefined)} />,
+    )
+
+    expect(markup).toContain('تمت إعادة تفعيل الحساب بعد المراجعة.')
+    expect(markup).not.toContain('تسجيل قرار المراجعة')
+    expect(markup).not.toContain('<form')
+  })
+
+  it('rejects mock decisions for resolved flags with a conflict', () => {
+    const resolvedFlag = {
+      ...redFlags[0],
+      id: 'resolved-mock-test',
+      status: 'resolved' as const,
+    }
+    redFlags.push(resolvedFlag)
+    try {
+      let error: unknown
+      try {
+        applyRedFlagDecision(resolvedFlag.id, 'close', 'ملاحظة')
+      } catch (cause) {
+        error = cause
+      }
+      expect(error).toBeInstanceOf(ApiError)
+      expect(error).toMatchObject({ status: 409, code: 'decision_not_applicable' })
+    } finally {
+      redFlags.pop()
+    }
+  })
 })
