@@ -1,12 +1,24 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { assignRedFlag, countOpenRedFlags, listRedFlagAssignees, listRedFlags, setRedFlagStatus } from '../services/data'
+import { decideRedFlag, countOpenRedFlags, listRedFlags } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Banner, Btn, Card, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
+import { formatRedFlagDate } from '../lib/format-date'
+import type { RedFlag } from '../types'
 
-type FlagAction = { id: string; kind: 'resolve' | 'assign' }
+const FLAG_LABELS: Record<string, string> = {
+  safety: 'أفكار لإيذاء النفس',
+  low_mood: 'درجة اكتئاب أو قلق مرتفعة',
+  non_compliance: 'عدم التزام بالخطة العلاجية',
+}
+
+const PRIORITY_LABELS = {
+  high: 'عالية',
+  medium: 'متوسطة',
+  low: 'منخفضة',
+} as const
 
 export default function RedFlags() {
   const { role } = useAuth()
@@ -14,46 +26,20 @@ export default function RedFlags() {
   const alertOnly = a.mask === 'alert'
   const full = a.level === 'full'
   const [revision, setRevision] = useState(0)
-  const [action, setAction] = useState<FlagAction | null>(null)
-  const [value, setValue] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
   const { data: redFlags = [], loading, error } = useAsync(
-    !alertOnly && a.level !== 'denied' ? listRedFlags : () => Promise.resolve([]), [role, revision],
+    !alertOnly && a.level !== 'denied' ? listRedFlags : () => Promise.resolve([]),
+    [role, revision],
   )
   const { data: openCount, loading: countsLoading, error: countsError } = useAsync(
-    a.level !== 'denied' ? countOpenRedFlags : () => Promise.resolve(undefined), [role, revision],
-  )
-  const needsAssignees = full && action?.kind === 'assign'
-  const { data: assignees = [], loading: assigneesLoading, error: assigneesError } = useAsync(
-    needsAssignees ? listRedFlagAssignees : () => Promise.resolve([]), [needsAssignees],
+    a.level !== 'denied' ? countOpenRedFlags : () => Promise.resolve(undefined),
+    [role, revision],
   )
 
-  function choose(next: FlagAction) {
-    setValue('')
-    setActionError(null)
-    setAction(next)
-  }
-
-  async function confirm() {
-    if (!full || !action || busy) return
-    setActionError(null)
-    setBusy(true)
-    try {
-      if (action.kind === 'assign') await assignRedFlag(action.id, value)
-      else await setRedFlagStatus(action.id, 'resolved', `تم الاتصال بالمريض: ${value.trim()}`)
-      setAction(null)
-      setRevision(n => n + 1)
-    } catch (e) {
-      setActionError(e instanceof Error && e.message ? e.message : 'تعذّر حفظ الإجراء.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const countNotice = countsLoading ? 'جارٍ تحميل عدد الحالات النشطة…'
-    : countsError || openCount === undefined ? 'تعذّر تحميل عدد الحالات النشطة.'
-    : `${openCount} حالة نشطة في قائمة Red Flags`
+  const countNotice = countsLoading
+    ? 'جارٍ تحميل عدد الحالات المفتوحة…'
+    : countsError || openCount === undefined
+      ? 'تعذّر تحميل عدد الحالات المفتوحة.'
+      : `${openCount} حالة مفتوحة`
 
   if (alertOnly) {
     return (
@@ -71,59 +57,177 @@ export default function RedFlags() {
 
   return (
     <>
-      <PageHeader title="التصعيد — Red Flags" sub={!full ? 'عرض فقط — الإجراءات متاحة للمشرف الإكلينيكي والمدير الرئيسي' : undefined} />
-      {(countsLoading || countsError || !!openCount) && <Banner tone="red"><Icon name="warn" size={14} className="ms-1 inline" /> {countNotice}</Banner>}
+      <PageHeader title="حالات الخطر" sub={!full ? 'عرض فقط — الإجراءات متاحة للمشرف الإكلينيكي والمدير الرئيسي' : undefined} />
+      {(countsLoading || countsError || !!openCount) && (
+        <Banner tone="red"><Icon name="warn" size={14} className="ms-1 inline" /> {countNotice}</Banner>
+      )}
       {loading && <p role="status">جارٍ تحميل الحالات…</p>}
       {error && <p role="alert">تعذّر تحميل قائمة الحالات.</p>}
+      {!loading && !error && redFlags.length === 0 && (
+        <Card><p className="text-[14px] text-[#657381]">لا توجد حالات خطر مفتوحة.</p></Card>
+      )}
       <div className="space-y-4">
-        {redFlags.map((f) => (
-          <Card key={f.id} className="flex items-start gap-4">
-            <span className={`mt-1 ${f.level === 'تم الحل' ? 'text-emerald-500' : 'text-red-500'}`}><Icon name={f.level === 'تم الحل' ? 'check' : 'flag'} size={20} /></span>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-[16px] font-bold text-[#0a0a0a]">{f.id} — {f.patientName} ({f.patientId})</span>
-                <Badge tone={f.level === 'حرج' ? 'red' : f.level === 'عالي' ? 'amber' : f.level === 'تم الحل' ? 'green' : 'blue'}>{f.level}</Badge>
-              </div>
-              <p className="mt-1 text-[14px] text-[#657381]">{f.reason}</p>
-              <p className="mt-1 text-[12px] text-[#657381]">المعالج: {f.therapistName} · {f.detectedAt}</p>
-              {f.assignedTo && <p className="mt-1 text-[12px] text-[#657381]">تم تعيين مسؤول للمتابعة</p>}
-            </div>
-            {full && f.level !== 'تم الحل' && (
-              <div className="flex flex-col gap-2">
-                <Btn tone="danger" disabled={busy} onClick={() => choose({ id: f.id, kind: 'resolve' })}>توثيق الاتصال وحلّ التنبيه</Btn>
-                <span title="لا يدعم النظام حجز جلسة طارئة من هذا التنبيه."><Btn tone="blue" disabled>إحالة لجلسة طارئة</Btn></span>
-                <Btn tone="outline" disabled={busy} onClick={() => choose({ id: f.id, kind: 'assign' })}>تعيين متابعة</Btn>
-                <span title="لا يرسل النظام تحويلًا إلى خدمات الطوارئ."><Btn tone="ghost" disabled>تحويل للطوارئ</Btn></span>
-                {action?.id === f.id && (
-                  <form className="space-y-2" onSubmit={e => { e.preventDefault(); void confirm() }}>
-                    {action.kind === 'assign' ? (
-                      <label className="block">
-                        مسؤول المتابعة
-                        <select className="block w-full rounded border p-2" value={value} onChange={e => setValue(e.target.value)} required disabled={busy || assigneesLoading || !!assigneesError}>
-                          <option value="">{assigneesLoading ? 'جارٍ التحميل…' : 'اختر موظفًا إكلينيكيًا'}</option>
-                          {assignees.map(staff => <option key={staff.id} value={staff.id}>{staff.name}</option>)}
-                        </select>
-                        {assigneesError && <span role="alert">تعذّر تحميل قائمة الموظفين.</span>}
-                        {!assigneesLoading && !assigneesError && !assignees.length && <span>لا يوجد موظفون متاحون للمتابعة.</span>}
-                      </label>
-                    ) : (
-                      <label className="block">
-                        سجّل نتيجة الاتصال بعد إجرائه خارج اللوحة. التأكيد يغلق هذا التنبيه.
-                        <textarea className="block w-full rounded border p-2" value={value} onChange={e => setValue(e.target.value)} required maxLength={1900} disabled={busy} />
-                      </label>
-                    )}
-                    {actionError && <p role="alert">{actionError}</p>}
-                    <div className="flex gap-2">
-                      <Btn type="submit" disabled={busy || !value.trim() || (action.kind === 'assign' && !assignees.some(staff => staff.id === value))}>{busy ? 'جارٍ الحفظ…' : 'تأكيد'}</Btn>
-                      <Btn tone="ghost" disabled={busy} onClick={() => setAction(null)}>إلغاء</Btn>
-                    </div>
-                  </form>
-                )}
-              </div>
-            )}
-          </Card>
+        {redFlags.map((flag) => (
+          <RedFlagCard
+            key={flag.id}
+            flag={flag}
+            full={full}
+            onDecision={async (decision, note) => {
+              await decideRedFlag(flag.id, decision, note)
+              setRevision((value) => value + 1)
+            }}
+          />
         ))}
       </div>
     </>
+  )
+}
+
+export function RedFlagCard({
+  flag,
+  full,
+  onDecision,
+}: {
+  flag: RedFlag
+  full: boolean
+  onDecision: (decision: 'reactivate' | 'keep_hold' | 'close', note: string) => Promise<void>
+}) {
+  const [decisionOpen, setDecisionOpen] = useState(false)
+  const whatsapp = flag.patientWhatsapp?.replace(/\D/g, '')
+  const priority = PRIORITY_LABELS[flag.priority]
+
+  return (
+    <Card className="flex flex-col gap-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-[16px] font-bold text-[#1f1f21]">{flag.patientName}</h2>
+            <Badge tone={flag.priority === 'high' ? 'red' : flag.priority === 'medium' ? 'amber' : 'blue'}>
+              الأولوية: {priority}
+            </Badge>
+            {flag.onHold && <Badge tone="red">الحساب معلّق</Badge>}
+            {flag.reactivationRequestedAt && (
+              <Badge tone="amber">طلب إعادة تفعيل · {formatRedFlagDate(flag.reactivationRequestedAt)}</Badge>
+            )}
+          </div>
+          <p className="mt-2 text-[14px] text-[#657381]">
+            <span className="font-bold">{FLAG_LABELS[flag.type] ?? 'تنبيه سريري'}</span>
+            {flag.reason && <span> · {flag.reason}</span>}
+            {flag.assessmentScore !== null && <span> · الدرجة: {flag.assessmentScore}</span>}
+          </p>
+          <p className="mt-1 text-[12px] text-[#657381]">
+            المعالج: {flag.therapistName ?? 'غير معيّن'} · المتابع: {flag.assigneeName ?? '—'} · {formatRedFlagDate(flag.detectedAt)}
+          </p>
+          {flag.actionTaken && (
+            <pre className="mt-3 whitespace-pre-wrap font-sans text-[12px] text-[#657381]">{flag.actionTaken}</pre>
+          )}
+        </div>
+        {full && (
+          <div className="flex shrink-0 flex-col gap-2">
+            {whatsapp && (
+              <a
+                className="inline-flex items-center justify-center rounded-xl bg-[#1d919e] px-4 py-2.5 text-center text-[14px] font-bold text-white no-underline hover:bg-[#187a85]"
+                href={`https://wa.me/${whatsapp}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                تواصل عبر واتساب
+              </a>
+            )}
+            <Btn tone="outline" onClick={() => setDecisionOpen((open) => !open)}>
+              {decisionOpen ? 'إخفاء نموذج القرار' : 'تسجيل قرار المراجعة'}
+            </Btn>
+          </div>
+        )}
+      </div>
+      {full && decisionOpen && (
+        <RedFlagDecisionForm
+          onHold={flag.onHold}
+          onSubmit={onDecision}
+          onCancel={() => setDecisionOpen(false)}
+        />
+      )}
+    </Card>
+  )
+}
+
+export function RedFlagDecisionForm({
+  onHold,
+  onSubmit,
+  onCancel,
+}: {
+  onHold: boolean
+  onSubmit: (decision: 'reactivate' | 'keep_hold' | 'close', note: string) => Promise<void>
+  onCancel: () => void
+}) {
+  const [decision, setDecision] = useState<'reactivate' | 'keep_hold' | 'close'>(onHold ? 'reactivate' : 'close')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (note.trim().length < 3 || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      await onSubmit(decision, note.trim())
+      onCancel()
+    } catch (cause) {
+      setError(cause instanceof Error && cause.message ? cause.message : 'تعذّر حفظ القرار.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className="space-y-3 border-t border-gray-100 pt-4" onSubmit={(event) => void submit(event)}>
+      {onHold ? (
+        <fieldset className="space-y-2 text-[14px] text-[#1f1f21]">
+          <legend className="mb-2 font-bold">القرار</legend>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="decision" value="reactivate" checked={decision === 'reactivate'} onChange={() => setDecision('reactivate')} />
+            إعادة تفعيل الحساب
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="decision" value="keep_hold" checked={decision === 'keep_hold'} onChange={() => setDecision('keep_hold')} />
+            إبقاء الحساب معلّقًا
+          </label>
+        </fieldset>
+      ) : (
+        <p className="text-[14px] font-bold text-[#1f1f21]">القرار: إغلاق الحالة</p>
+      )}
+      <label className="block text-[14px] font-medium text-[#1f1f21]">
+        الملاحظة
+        <textarea
+          className="mt-1 block min-h-24 w-full rounded-xl border border-gray-200 p-3 text-[14px] outline-none focus:border-[#1d919e]"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          required
+          minLength={3}
+          maxLength={1900}
+          disabled={busy}
+        />
+      </label>
+      <p className="text-[12px] text-[#657381]">سجّل ما تم في التواصل مع المريض. تُحفظ الملاحظة في السجل.</p>
+      {error && <p role="alert" className="text-[14px] text-red-600">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={busy || note.trim().length < 3}
+          className="inline-flex items-center justify-center rounded-xl bg-[#1d919e] px-4 py-2.5 text-[14px] font-bold text-white disabled:opacity-50"
+        >
+          {busy ? 'جارٍ الحفظ…' : 'حفظ القرار'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="rounded-xl px-4 py-2.5 text-[14px] font-bold text-[#1d919e] hover:bg-[#c7e4e7]/40 disabled:opacity-50"
+        >
+          إلغاء
+        </button>
+      </div>
+    </form>
   )
 }

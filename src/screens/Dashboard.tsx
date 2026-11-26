@@ -57,7 +57,7 @@ export default function Dashboard() {
 
   const QUEUES = [
     { icon: 'receipt', label: 'حوالات جديدة', count: payments.filter((p) => p.status !== 'تمت الموافقة' && p.status !== 'مرفوض').length, sub: 'تحتاج مراجعة وموافقة', to: '/payments', badge: 'amber' as const, kind: 'money' },
-    { icon: 'flag', label: 'Red Flags', count: redFlags.filter((r) => r.level !== 'تم الحل').length, sub: 'حالات تحتاج إشرافاً فورياً', to: '/red-flags', badge: 'red' as const, kind: 'clinical' },
+    { icon: 'flag', label: 'حالات الخطر', count: redFlags.filter((r) => r.level !== 'تم الحل').length, sub: 'حالات تحتاج إشرافاً فورياً', to: '/red-flags', badge: 'red' as const, kind: 'clinical' },
     { icon: 'file', label: 'طلبات ملفات', count: docRequests.filter((d) => d.status === 'قيد المراجعة').length, sub: 'طلبات تغيير معالج إلخ', to: '/doc-requests', badge: 'blue' as const, kind: 'ops' },
     { icon: 'ticket', label: 'تذاكر مفتوحة', count: tickets.filter((t) => t.status === 'مفتوحة').length, sub: 'تنبيهات وبلاغات فنية', to: '/tickets', badge: 'blue' as const, kind: 'tickets' },
   ]

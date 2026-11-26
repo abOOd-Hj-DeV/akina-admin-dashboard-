@@ -46,11 +46,10 @@ export const adminApi = {
     api.get<Page<ApiRedFlag> & { stats?: ApiRedFlagStats }>(`/api/v1/admin/red-flags${qs(f)}`),
   redFlag: (id: string) => api.get<{ data: ApiRedFlag }>(`/api/v1/admin/red-flags/${id}`),
   redFlagCounts: () => api.get<{ data: ApiRedFlagCounts }>('/api/v1/admin/red-flags/stats'),
-  redFlagAssignees: () => api.get<{ data: { id: string; name: string }[] }>('/api/v1/admin/red-flags/assignees'),
-  assignRedFlag: (id: string, user_id: string) =>
-    api.post(`/api/v1/admin/red-flags/${id}/assign`, { user_id }),
-  setRedFlagStatus: (id: string, status: string, action_taken?: string) =>
-    api.post(`/api/v1/admin/red-flags/${id}/status`, { status, action_taken }),
+  decideRedFlag: (
+    id: string,
+    body: { decision: 'reactivate' | 'keep_hold' | 'close'; note: string },
+  ) => api.post<{ message: string; data: ApiRedFlag }>(`/api/v1/admin/red-flags/${id}/decision`, body),
 
   // البرامج — + clinical_supervisor
   programs: () => api.get<Page<ApiProgram>>('/api/v1/admin/programs'),

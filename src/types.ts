@@ -59,13 +59,23 @@ export interface Payment {
 }
 
 export interface RedFlag {
-  assignedTo?: string | null
   id: string
   patientId: string
   patientName: string
-  therapistName: string
+  patientWhatsapp?: string | null
+  type: string
+  priority: 'high' | 'medium' | 'low'
+  status: 'open' | 'assigned' | 'resolved'
+  assignedTo?: string | null
+  assigneeName: string | null
+  therapistName: string | null
   reason: string
   level: 'حرج' | 'عالي' | 'متوسط' | 'تم الحل'
+  assessmentScore: number | null
+  onHold: boolean
+  holdSince: string | null
+  reactivationRequestedAt: string | null
+  actionTaken: string | null
   detectedAt: string
 }
 

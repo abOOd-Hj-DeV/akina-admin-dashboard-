@@ -96,7 +96,7 @@ export const NAV: { screen: Screen; label: string; icon: string }[] = [
   { screen: 'therapists', label: 'إدارة المعالجين', icon: 'stetho' },
   { screen: 'payments', label: 'مراجعة المدفوعات', icon: 'card' },
   { screen: 'clinical', label: 'الإشراف الإكلينيكي', icon: 'clinical' },
-  { screen: 'red-flags', label: 'التصعيد (Red Flags)', icon: 'flag' },
+  { screen: 'red-flags', label: 'حالات الخطر', icon: 'flag' },
   { screen: 'programs', label: 'مكتبة البرامج', icon: 'book' },
   { screen: 'doc-requests', label: 'طلبات الملفات', icon: 'file' },
   { screen: 'reports', label: 'التقارير', icon: 'chart' },

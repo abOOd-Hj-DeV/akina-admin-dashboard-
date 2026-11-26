@@ -92,13 +92,20 @@ export interface ApiRedFlag {
   id: string
   patient_id: string
   patient_name?: string | null
-  type: 'safety' | string
+  patient_whatsapp?: string | null
+  type: string
   priority: 'high' | 'medium' | 'low'
   status: 'open' | 'assigned' | 'resolved' | string
   description: string
   action_taken: string | null
   assigned_to: string | null
+  assignee_name?: string | null
+  therapist_name?: string | null
   assessment_id: string | null
+  assessment_score?: number | null
+  on_hold: boolean
+  hold_since: string | null
+  reactivation_requested_at: string | null
   previous_flag_id: string | null
   created_at: string
   updated_at: string
