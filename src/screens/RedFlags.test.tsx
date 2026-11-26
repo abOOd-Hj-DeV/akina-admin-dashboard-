@@ -1,5 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../api/client'
+import { applyRedFlagDecision, redFlags } from '../data/mock'
 import { RedFlagCard, RedFlagDecisionForm } from './RedFlags'
 import type { RedFlag } from '../types'
 
@@ -52,5 +54,43 @@ describe('واجهة حالات الخطر', () => {
     expect(markup).toContain('إبقاء الحساب معلّقًا')
     expect(markup).toContain('سجّل ما تم في التواصل مع المريض. تُحفظ الملاحظة في السجل.')
     expect(markup).toContain('disabled=""')
+  })
+
+  it('يعرض سجل الحالة المحلولة ويخفي إجراءات القرار', () => {
+    const resolvedFlag = {
+      ...heldFlag,
+      status: 'resolved' as const,
+      level: 'تم الحل' as const,
+      onHold: false,
+      actionTaken: 'تمت إعادة تفعيل الحساب بعد المراجعة.',
+    }
+    const markup = renderToStaticMarkup(
+      <RedFlagCard flag={resolvedFlag} full onDecision={vi.fn(async () => undefined)} />,
+    )
+
+    expect(markup).toContain('تمت إعادة تفعيل الحساب بعد المراجعة.')
+    expect(markup).not.toContain('تسجيل قرار المراجعة')
+    expect(markup).not.toContain('<form')
+  })
+
+  it('rejects mock decisions for resolved flags with a conflict', () => {
+    const resolvedFlag = {
+      ...redFlags[0],
+      id: 'resolved-mock-test',
+      status: 'resolved' as const,
+    }
+    redFlags.push(resolvedFlag)
+    try {
+      let error: unknown
+      try {
+        applyRedFlagDecision(resolvedFlag.id, 'close', 'ملاحظة')
+      } catch (cause) {
+        error = cause
+      }
+      expect(error).toBeInstanceOf(ApiError)
+      expect(error).toMatchObject({ status: 409, code: 'decision_not_applicable' })
+    } finally {
+      redFlags.pop()
+    }
   })
 })

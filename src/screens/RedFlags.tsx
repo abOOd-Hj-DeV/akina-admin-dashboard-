@@ -95,6 +95,7 @@ export function RedFlagCard({
   const [decisionOpen, setDecisionOpen] = useState(false)
   const whatsapp = flag.patientWhatsapp?.replace(/\D/g, '')
   const priority = PRIORITY_LABELS[flag.priority]
+  const canDecide = full && flag.status !== 'resolved'
 
   return (
     <Card className="flex flex-col gap-4">
@@ -134,13 +135,15 @@ export function RedFlagCard({
                 تواصل عبر واتساب
               </a>
             )}
-            <Btn tone="outline" onClick={() => setDecisionOpen((open) => !open)}>
-              {decisionOpen ? 'إخفاء نموذج القرار' : 'تسجيل قرار المراجعة'}
-            </Btn>
+            {canDecide && (
+              <Btn tone="outline" onClick={() => setDecisionOpen((open) => !open)}>
+                {decisionOpen ? 'إخفاء نموذج القرار' : 'تسجيل قرار المراجعة'}
+              </Btn>
+            )}
           </div>
         )}
       </div>
-      {full && decisionOpen && (
+      {canDecide && decisionOpen && (
         <RedFlagDecisionForm
           onHold={flag.onHold}
           onSubmit={onDecision}

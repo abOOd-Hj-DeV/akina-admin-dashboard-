@@ -1,4 +1,5 @@
 import type { AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Therapist, Ticket } from '../types'
+import { ApiError } from '../api/client'
 
 export const patients: Patient[] = [
   { id: 'P-1247', name: 'أحمد م.', therapistId: 'T-042', status: 'نشط', subscription: 'باقة 8 أسابيع', progress: 40, compliance: 85, lastActivity: 'منذ ساعة' },
@@ -97,6 +98,9 @@ export function applyRedFlagDecision(
 ): RedFlag {
   const flag = redFlags.find(item => item.id === id)
   if (!flag) throw new Error('الحالة غير متاحة.')
+  if (flag.status === 'resolved') {
+    throw new ApiError(409, 'الحالة محلولة ولا يمكن اتخاذ قرار جديد.', undefined, 'decision_not_applicable')
+  }
 
   flag.actionTaken = [flag.actionTaken, note].filter(Boolean).join('\n\n')
   if (decision === 'reactivate' || decision === 'close') {
