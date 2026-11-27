@@ -8,6 +8,7 @@ import { API_MOCK } from '../api/client'
 import { Badge, Btn, Card, DataState, PageHeader, ProgressBar } from '../components/ui'
 import Icon from '../components/Icon'
 import { formatAdminDate } from '../lib/format-date'
+import { redFlagPriority } from '../lib/red-flag-label'
 
 const TABS = ['بيانات الحساب', 'المعالج والبرنامج', 'التقدم العلاجي', 'سجل المزاج', 'الجلسات', 'التحذيرات', 'المستندات']
 /** تبويبات سريرية — مخفية عن Admin */
@@ -154,15 +155,18 @@ export default function PatientProfile() {
           {tabs[tab] === 'التحذيرات' && (
             <div className="space-y-2">
               {canListRedFlags && <DataState loading={flagsLoading} error={flagsError} hasData={flagData !== undefined} empty={flagData !== undefined && flags.length === 0} emptyMessage="لا تحذيرات مسجلة." onRetry={reloadFlags} />}
-              {flags.map((f) => (
+              {flags.map((f) => {
+                const priority = redFlagPriority(f.priority)
+                return (
                 <div key={f.id} className="rounded-xl border border-red-100 bg-red-50/50 px-4 py-3">
                   <div className="flex items-center gap-2 font-bold text-[#0a0a0a]">
-                    <Icon name="flag" size={14} className="inline" /> {f.id} <Badge tone="red">{f.level}</Badge>
+                    <Icon name="flag" size={14} className="inline" /> {f.id} <Badge tone={priority.tone}>{priority.label}</Badge>
                   </div>
                   <p className="mt-1 text-[14px] text-[#657381]">{f.reason}</p>
                   <p className="mt-1 text-[12px] text-[#657381]">تم الرصد: {formatAdminDate(f.detectedAt)}</p>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
           {tabs[tab] === 'المستندات' && (
