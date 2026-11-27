@@ -86,6 +86,39 @@ it('rechecks the row at the advertised boundary and never resends an invitation 
   }
 })
 
+it('persists simulated cancellation and resend across demo list reloads without transport', async () => {
+  vi.stubEnv('VITE_API_MOCK', 'true')
+  const fetch = vi.fn()
+  vi.stubGlobal('fetch', fetch)
+  vi.stubGlobal('confirm', vi.fn(() => true))
+  const [{ default: Users }, { changeStaff, inviteUser, listStaff }] = await Promise.all([import('./Users'), import('../services/data')])
+  await inviteUser({ name: 'دعوة جديدة تجريبية', email: 'demo@example.test', whatsapp_number: '+963900000099', role: 'support_agent' })
+  const view = mount()
+  const row = (name: string) => [...view.container.querySelectorAll('tbody tr')].find((item) => item.firstElementChild?.textContent === name)
+  const action = (name: string, label: string) =>
+    [...(row(name)?.querySelectorAll('button') ?? [])].find((button) => button.textContent === label)
+  try {
+    await view.render(<MemoryRouter><Users /></MemoryRouter>)
+    expect(row('دعوة جديدة تجريبية')?.textContent).toContain('دعوة معلّقة')
+    expect(action('دعوة جديدة تجريبية', 'إعادة الدعوة')).toBeUndefined()
+    await act(async () => action('موظف الدعم', 'إعادة الدعوة')!.click())
+    expect(row('موظف الدعم')?.textContent).toContain('يمكن إعادة الدعوة بعد')
+    expect(action('موظف الدعم', 'إعادة الدعوة')).toBeUndefined()
+    const beforeRefusal = await listStaff(1, 'admin', null)
+    await expect(changeStaff('U-04', 'resend_invite', 'admin', null)).rejects.toMatchObject({ status: 409 })
+    expect(await listStaff(1, 'admin', null)).toEqual(beforeRefusal)
+    await act(async () => action('دعوة جديدة تجريبية', 'إلغاء الدعوة')!.click())
+    expect(row('دعوة جديدة تجريبية')).toBeUndefined()
+    await act(async () => vi.advanceTimersByTimeAsync(60_000))
+    expect(row('دعوة جديدة تجريبية')).toBeUndefined()
+    expect(action('موظف الدعم', 'إعادة الدعوة')).toBeDefined()
+    expect(fetch).not.toHaveBeenCalled()
+  } finally {
+    vi.restoreAllMocks()
+    await view.unmount()
+  }
+})
+
 it('renders only server-authorized staff status actions and reloads a stale row after refusal', async () => {
   auth.role = 'super_admin'
   const own = { ...accepted, id: 'self', name: 'own row', role: 'super_admin', allowed_staff_actions: [] }

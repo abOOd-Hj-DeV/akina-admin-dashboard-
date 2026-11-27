@@ -4,34 +4,27 @@ import { useAuth } from '../auth/AuthContext'
 import { access, INVITABLE_STAFF_ROLES, ROLE_LABELS } from '../auth/permissions'
 import { API_MOCK } from '../api/client'
 import { describeAuthError } from '../api/errors'
-import { adminApi } from '../api/admin'
 import type { ApiAdminUser } from '../api/types'
 import type { Role } from '../types'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, DataState, PageHeader, Table } from '../components/ui'
 import InviteUserForm from '../components/InviteUserForm'
 import { formatAdminDate } from '../lib/format-date'
+import { changeStaff, listStaff } from '../services/data'
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
 
-const MOCK_USERS: ApiAdminUser[] = [
-  { id: 'U-01', name: 'أحمد الإداري', email: 'admin@sakina.app', whatsapp_number: '+963900000001', role: 'admin', is_active: true, created_at: '2025-09-01' },
-  { id: 'U-02', name: 'د. سالم المشرف', email: 'sup@sakina.app', role: 'clinical_supervisor', is_active: true, created_at: '2025-09-05' },
-  { id: 'U-03', name: 'شريك المالية', email: 'fin@sakina.app', role: 'finance_partner', is_active: true, created_at: '2025-09-10' },
-  { id: 'U-04', name: 'موظف الدعم', email: 'supp@sakina.app', role: 'support_agent', is_active: false, pending_invitation: true, created_at: '2025-10-02' },
-]
-
 /** إدارة المستخدمين — الرئيسي + المدير + المشرف (حسب عقد الـAPI) */
 export default function Users() {
-  const { role } = useAuth()
+  const { role, userId } = useAuth()
   const a = role ? access(role, 'users') : { level: 'denied' as const }
   const staffRoles: Role[] = (role && INVITABLE_STAFF_ROLES[role]) ?? []
   const canEdit = a.level === 'full' && staffRoles.length > 0
   const [page, setPage] = useState(1)
   const [revision, setRevision] = useState(0)
   const { data, loading, refreshing, error, reload: refresh } = useAsync(
-    () => (API_MOCK ? Promise.resolve({ data: MOCK_USERS, last_page: 1 }) : adminApi.users({ page })),
-    [page, revision],
+    () => listStaff(page, role, userId),
+    [page, revision, role, userId],
   )
   const users = data?.data ?? []
   const reload = () => setRevision(n => n + 1)
@@ -53,12 +46,13 @@ export default function Users() {
   const actionsBlocked = working || loading || refreshing || error !== null
 
   const toggle = async (u: ApiAdminUser) => {
-    if (actionsBlocked || !u.allowed_staff_actions?.includes(u.is_active ? 'deactivate' : 'reactivate')) return
+    const action = u.is_active ? 'deactivate' : 'reactivate'
+    if (actionsBlocked || !u.allowed_staff_actions?.includes(action)) return
     setWorking(true)
     setErr(null)
     setNotice(null)
     try {
-      await adminApi.setUserActive(u.id, !u.is_active)
+      await changeStaff(u.id, action, role, userId)
     } catch (e) {
       setErr(errText(e, 'تعذّر تغيير حالة الحساب.'))
     } finally {
@@ -67,17 +61,15 @@ export default function Users() {
     }
   }
   const manageInvitation = async (u: ApiAdminUser, kind: 'cancel' | 'resend') => {
-    if (!u.pending_invitation || actionsBlocked || !u.allowed_staff_actions?.includes(kind === 'cancel' ? 'cancel_invite' : 'resend_invite')) return
+    const action = kind === 'cancel' ? 'cancel_invite' : 'resend_invite'
+    if (!u.pending_invitation || actionsBlocked || !u.allowed_staff_actions?.includes(action)) return
     if (kind === 'cancel' && !window.confirm(`إلغاء دعوة ${u.name}؟ سيُحذف الحساب المعلّق ويصبح الرقم والبريد متاحين لدعوة جديدة.`)) return
     setWorking(true)
     setErr(null)
     setNotice(null)
     try {
-      if (!API_MOCK) {
-        if (kind === 'cancel') await adminApi.cancelInvitation(u.id)
-        else await adminApi.resendInvitation(u.id)
-      }
-      setNotice(kind === 'cancel' ? 'أُلغيت الدعوة.' : 'أُرسلت الدعوة مرة أخرى.')
+      await changeStaff(u.id, action, role, userId)
+      setNotice(kind === 'cancel' ? 'أُلغيت الدعوة.' : API_MOCK ? 'جُدّدت الدعوة التجريبية دون إرسال واتساب.' : 'أُرسلت الدعوة مرة أخرى.')
       if (kind === 'cancel' && users.length === 1 && page > 1) setPage(n => n - 1)
       else reload()
     } catch (e) {
@@ -92,7 +84,7 @@ export default function Users() {
     <>
       <PageHeader
         title="إدارة المستخدمين"
-        sub="حسابات فريق الإدارة والمعالجين — الدعوات ترسل عبر واتساب"
+        sub={API_MOCK ? 'حسابات تجريبية — لا تُرسل الدعوات عبر واتساب' : 'حسابات فريق الإدارة والمعالجين — الدعوات ترسل عبر واتساب'}
         action={canEdit ? <Btn tone="primary" onClick={() => setAdding((v) => !v)}>+ دعوة مستخدم</Btn> : undefined}
       />
       {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}

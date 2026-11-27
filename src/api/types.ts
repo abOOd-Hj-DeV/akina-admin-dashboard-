@@ -276,6 +276,8 @@ export interface ApiProgram {
   updated_at?: string
 }
 
+export type StaffAction = 'deactivate' | 'reactivate' | 'resend_invite' | 'cancel_invite'
+
 export interface ApiAdminUser {
   id: string
   name: string
@@ -286,7 +288,7 @@ export interface ApiAdminUser {
   is_active: boolean
   activated?: boolean
   pending_invitation?: boolean
-  allowed_staff_actions?: ('deactivate' | 'reactivate' | 'resend_invite' | 'cancel_invite')[]
+  allowed_staff_actions?: StaffAction[]
   invitation?: { retry_after: number; resend_available_at: string; code_usable: boolean } | null
   last_login?: string | null
   created_at: string

@@ -10,12 +10,13 @@ import { adminApi } from '../api/admin'
 import type {
   ApiAdminPatient, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAuditEntry, ApiDocument,
   ApiFaq, ApiOverview, ApiPayment, ApiProgram, ApiRedFlag, ApiSupportTicket, ApiWithdrawal,
-  CreateUserBody, TherapistActionCode,
+  CreateUserBody, StaffAction, TherapistActionCode,
 } from '../api/types'
 import type {
   AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Role, Ticket,
 } from '../types'
 import * as mock from '../data/mock'
+import { mockStaff } from '../data/mock-staff'
 import { THERAPIST_OPTIONS } from '../data/therapistOptions'
 import { APPLICATION_REF_TAKEN } from '../lib/invite'
 
@@ -377,7 +378,17 @@ export async function inviteUser(body: CreateUserBody) {
       id: crypto.randomUUID(), full_name: body.name, approval_status: null, created_at: new Date().toISOString(),
       whatsapp_number: body.whatsapp_number, application_ref, lifecycle_state: 'invited', is_active: false, availability: [],
     }))
-  }
+  } else mockStaff.invite(body)
+}
+
+export const listStaff = (page: number, role: Role | null, userId: string | null) =>
+  API_MOCK ? mockStaff.list(role, userId, page) : adminApi.users({ page })
+
+export async function changeStaff(id: string, action: StaffAction, role: Role | null, userId: string | null): Promise<void> {
+  if (API_MOCK) return mockStaff.change(id, action, role, userId)
+  if (action === 'resend_invite') await adminApi.resendInvitation(id)
+  else if (action === 'cancel_invite') await adminApi.cancelInvitation(id)
+  else await adminApi.setUserActive(id, action === 'reactivate')
 }
 
 export async function requestDocument(userId: string, type: keyof typeof DOCUMENT_TYPES, reason?: string) {
