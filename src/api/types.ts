@@ -117,16 +117,46 @@ export interface ApiRedFlagStats {
 
 export type ApiRedFlagCounts = Record<'open' | 'resolved', Record<ApiRedFlag['priority'], number>>
 
+export type TherapistApproval = 'pending' | 'approved' | 'rejected'
+export type TherapistFilter = 'all' | 'not_submitted' | TherapistApproval
+
 export interface ApiAdminTherapist {
   id: string
   full_name: string
-  email: string
-  approval_status: 'pending' | 'approved' | 'rejected'
+  has_license: boolean
+  specialty: string | null
+  country: string | null
+  languages: string[] | null
+  bio: string | null
+  years_of_experience: number | null
+  rating: number | string | null
+  approval_status: TherapistApproval | null
+  can_accept_new_clients: boolean
+  availability: unknown
   clients_count: number
-  clients_limit?: number | null
-  rating?: number | null
+  clients_limit: number | null
   is_active: boolean
-  joined_at?: string
+  whatsapp_number: string | null
+  created_at: string
+  approval_note: string | null
+  submitted_at: string | null
+}
+
+export interface TherapistDecision {
+  user_id: string
+  approval_status: TherapistApproval
+  approval_note: string | null
+}
+
+export interface TherapistOption {
+  code: string
+  name_ar: string
+}
+
+export interface TherapistOptions {
+  countries: TherapistOption[]
+  languages: TherapistOption[]
+  specialties: TherapistOption[]
 }
 
 /** SupportService::toArray — لا priority ولا requester؛ النوع type والمُرسل user */
@@ -146,6 +176,8 @@ export interface ApiSupportTicket {
 }
 
 /** DocumentRequestService::toArray (staff view) */
+export type DocumentType = 'license' | 'identity' | 'certificate' | 'payment_proof' | 'support_file' | 'other'
+
 export interface ApiDocument {
   id: string
   doc_type: string

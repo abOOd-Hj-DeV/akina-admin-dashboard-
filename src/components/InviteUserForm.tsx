@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import type { CountryCode } from 'libphonenumber-js/min'
-import { API_MOCK } from '../api/client'
-import { adminApi } from '../api/admin'
 import { describeAuthError } from '../api/errors'
 import type { ApiRole } from '../api/types'
 import { ROLE_LABELS } from '../auth/permissions'
@@ -9,6 +7,8 @@ import type { Role } from '../types'
 import { DEFAULT_COUNTRY } from '../lib/phone'
 import { buildInvite, mapInviteErrors, type InviteField as Field } from '../lib/invite'
 import { useFieldErrors } from '../hooks/useFieldErrors'
+import { useAsync } from '../hooks/useAsync'
+import { getTherapistOptions, inviteUser } from '../services/data'
 import { Btn, Card } from './ui'
 import PhoneInput, { FieldError } from './PhoneInput'
 
@@ -28,18 +28,24 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
   const [role, setRole] = useState<ApiRole>(roles[0])
   const [specialty, setSpecialty] = useState('')
   const [tCountry, setTCountry] = useState('')
-  const [languages, setLanguages] = useState('')
+  const [languages, setLanguages] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const { errors, clear, reset, replace } = useFieldErrors<Field>()
   const isTherapist = role === 'therapist'
+  const { data: options, loading: optionsLoading } = useAsync(
+    () => isTherapist ? getTherapistOptions() : Promise.resolve(null),
+    [isTherapist],
+    { interval: 0 },
+  )
 
   const submit = async () => {
+    if (busy || (isTherapist && !options)) return
     reset()
     const { body, errors: local } = buildInvite({ name, email, whatsapp: wa, country, role, specialty, therapistCountry: tCountry, languages })
     if (!body) { replace(local); return }
     setBusy(true)
     try {
-      if (!API_MOCK) await adminApi.createUser(body)
+      await inviteUser(body)
       onDone()
     } catch (e) {
       const d = describeAuthError(e, 'تعذّر إرسال الدعوة.')
@@ -79,24 +85,40 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
           ) : null}
           {isTherapist && (
             <>
-              <div>
-                <input value={specialty} onChange={(e) => { setSpecialty(e.target.value); clear('therapist.specialty') }} placeholder="التخصص" aria-label="التخصص" className={`${box} ${tone(errors['therapist.specialty'])}`} />
+              <label className="text-sm">
+                التخصص
+                <select value={specialty} onChange={(e) => { setSpecialty(e.target.value); clear('therapist.specialty') }}
+                  disabled={!options || busy} className={`${box} ${tone(errors['therapist.specialty'])}`}>
+                  <option value="">اختر التخصص</option>
+                  {options?.specialties.map(({ code, name_ar }) => <option key={code} value={code}>{name_ar}</option>)}
+                </select>
                 <FieldError>{errors['therapist.specialty']}</FieldError>
-              </div>
-              <div>
-                <input value={tCountry} onChange={(e) => { setTCountry(e.target.value); clear('therapist.country') }} placeholder="الدولة" aria-label="الدولة" className={`${box} ${tone(errors['therapist.country'])}`} />
+              </label>
+              <label className="text-sm">
+                الدولة
+                <select value={tCountry} onChange={(e) => { setTCountry(e.target.value); clear('therapist.country') }}
+                  disabled={!options || busy} className={`${box} ${tone(errors['therapist.country'])}`}>
+                  <option value="">اختر الدولة</option>
+                  {options?.countries.map(({ code, name_ar }) => <option key={code} value={code}>{name_ar}</option>)}
+                </select>
                 <FieldError>{errors['therapist.country']}</FieldError>
-              </div>
-              <div className="md:col-span-2">
-                <input value={languages} onChange={(e) => { setLanguages(e.target.value); clear('therapist.languages') }} placeholder="اللغات (اختياري، افصل بفاصلة: العربية، English)" aria-label="اللغات" className={`${box} ${tone(errors['therapist.languages'])}`} />
+              </label>
+              <label className="text-sm md:col-span-2">
+                اللغات (اختياري، يمكنك اختيار أكثر من لغة)
+                <select multiple value={languages} size={4} disabled={!options || busy}
+                  onChange={(e) => { setLanguages(Array.from(e.currentTarget.selectedOptions, o => o.value)); clear('therapist.languages') }}
+                  className={`${box} ${tone(errors['therapist.languages'])}`}>
+                  {options?.languages.map(({ code, name_ar }) => <option key={code} value={code}>{name_ar}</option>)}
+                </select>
                 <FieldError>{errors['therapist.languages']}</FieldError>
-              </div>
+              </label>
+              {optionsLoading && <p role="status" className="text-sm text-[#657381]">جارٍ تحميل خيارات المعالج…</p>}
             </>
           )}
         </div>
         {errors.form && <p role="alert" className="rounded-xl bg-red-50 px-4 py-2 text-[12px] font-medium text-[#fd4438]">{errors.form}</p>}
         <div className="flex gap-2">
-          <Btn tone="green" type="submit" disabled={busy}>{busy ? 'جارٍ الإرسال…' : 'إرسال الدعوة'}</Btn>
+          <Btn tone="green" type="submit" disabled={busy || (isTherapist && !options)}>{busy ? 'جارٍ الإرسال…' : 'إرسال الدعوة'}</Btn>
           <Btn tone="ghost" type="button" onClick={onCancel}>إلغاء</Btn>
         </div>
       </form>

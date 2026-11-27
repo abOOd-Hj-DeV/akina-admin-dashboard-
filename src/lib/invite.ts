@@ -6,12 +6,10 @@ import { PHONE_INVALID_MSG, toE164 } from './phone'
 export type InviteField = 'name' | 'email' | 'whatsapp_number' | 'role' | 'therapist.specialty' | 'therapist.country' | 'therapist.languages'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-export const splitLanguages = (s: string) => s.split(/[,،]/).map((x) => x.trim()).filter(Boolean)
-
 /** يبني جسم POST /admin/users؛ يعيد أخطاء الحقول إن وُجدت */
 export function buildInvite(input: {
   name: string; email: string; whatsapp: string; country: CountryCode; role: ApiRole
-  specialty?: string; therapistCountry?: string; languages?: string
+  specialty?: string; therapistCountry?: string; languages?: string[]
 }): { body: CreateUserBody | null; errors: Partial<Record<InviteField, string>> } {
   const errors: Partial<Record<InviteField, string>> = {}
   const wa = toE164(input.whatsapp, input.country)
@@ -24,7 +22,7 @@ export function buildInvite(input: {
     const country = (input.therapistCountry ?? '').trim()
     if (!specialty) errors['therapist.specialty'] = 'التخصص مطلوب.'
     if (!country) errors['therapist.country'] = 'الدولة مطلوبة.'
-    const languages = splitLanguages(input.languages ?? '')
+    const languages = input.languages ?? []
     body.therapist = { specialty, country, ...(languages.length ? { languages } : {}) }
   }
   return { body: Object.keys(errors).length ? null : body, errors }
