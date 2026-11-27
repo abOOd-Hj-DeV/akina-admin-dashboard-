@@ -9,6 +9,7 @@ export const API_MOCK: boolean =
 export const REQUEST_TIMEOUT_MS = 60_000
 
 const REFRESH_KEY = 'sakina-refresh'
+const REFRESH_PENDING_KEY = 'sakina-refresh-pending'
 /** مفاتيح localStorage القديمة — تُحذف عند التحميل ولا تُقرأ */
 export const LEGACY_TOKEN_KEYS = ['sakina-token', 'sakina-refresh'] as const
 
@@ -22,6 +23,7 @@ function setTokens(token: string, refresh?: string): void {
   accessToken = token
   if (refresh) session()?.setItem(REFRESH_KEY, refresh)
   else session()?.removeItem(REFRESH_KEY)
+  session()?.removeItem(REFRESH_PENDING_KEY)
 }
 
 export const tokenStore = {
@@ -36,6 +38,7 @@ export const tokenStore = {
     sessionGeneration++
     accessToken = null
     session()?.removeItem(REFRESH_KEY)
+    session()?.removeItem(REFRESH_PENDING_KEY)
   },
 }
 
@@ -114,28 +117,39 @@ async function toError(res: Response, json: unknown): Promise<ApiError> {
   return new ApiError(res.status, j.message ?? `HTTP ${res.status}`, j.errors, j.code, j.meta)
 }
 
-let refreshing: { generation: number; result: Promise<boolean> } | undefined
+export type Recovery = 'retry' | 'sign_in'
+type RefreshResult = 'refreshed' | 'invalid' | 'stale' | Recovery
+let refreshing: { generation: number; result: Promise<RefreshResult> } | undefined
 
 /**
  * يستبدل زوج التوكنات عبر /auth/refresh. طلب واحد فقط في نفس الوقت: توكن التجديد
  * يُستعمل مرة واحدة، وإعادة استخدامه تُعتبر تسريباً فيُلغي الباك اند كل الجلسات.
  */
-export function refreshSession(generation = sessionGeneration): Promise<boolean> {
-  if (generation !== sessionGeneration) return Promise.resolve(false)
+export function refreshSession(generation = sessionGeneration): Promise<RefreshResult> {
+  if (generation !== sessionGeneration) return Promise.resolve('stale')
   if (refreshing?.generation === generation) return refreshing.result
   const refresh_token = tokenStore.getRefresh()
-  if (!refresh_token) return Promise.resolve(false)
-  const result = (async () => {
+  if (!refresh_token) return Promise.resolve('invalid')
+  if (session()?.getItem(REFRESH_PENDING_KEY)) return Promise.resolve('sign_in')
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve('retry')
+  session()?.setItem(REFRESH_PENDING_KEY, '1')
+  const result = (async (): Promise<RefreshResult> => {
     try {
       const { res, json: body } = await send('POST', '/api/v1/auth/refresh',
         { Accept: 'application/json', 'Content-Type': 'application/json' }, JSON.stringify({ refresh_token }))
       const json = body as TokenPair | null
-      if (generation !== sessionGeneration) return false
-      if (!res.ok || !json?.access_token) { expireSession(generation); return false }
+      if (generation !== sessionGeneration) return 'stale'
+      const error = body as { errors?: { refresh_token?: unknown } } | null
+      if ([401, 403].includes(res.status) || (res.status === 422 && error?.errors?.refresh_token)) return 'invalid'
+      if (res.status === 429 && res.headers.has('Retry-After')) {
+        session()?.removeItem(REFRESH_PENDING_KEY)
+        return 'retry'
+      }
+      if (!res.ok || !json?.access_token || !json.refresh_token) return 'sign_in'
       setTokens(json.access_token, json.refresh_token)
-      return true
+      return 'refreshed'
     } catch {
-      return false
+      return generation === sessionGeneration ? 'sign_in' : 'stale'
     } finally {
       if (refreshing?.generation === generation) refreshing = undefined
     }
@@ -173,10 +187,15 @@ async function request<T>(
   if (!res.ok) {
     if (res.status === 401 && !NO_RETRY.test(path)) {
       if (!retried && tokenStore.getRefresh()) {
-        if (token !== tokenStore.get() || await refreshSession(generation)) {
+        const result = token !== tokenStore.get() ? 'refreshed' : await refreshSession(generation)
+        assertSession(generation)
+        if (result === 'refreshed') {
           return request<T>(method, path, body, opts, true, generation)
         }
-        if (generation !== sessionGeneration && tokenStore.get()) assertSession(generation)
+        if (result === 'retry' || result === 'sign_in') {
+          window.dispatchEvent(new CustomEvent<Recovery>('sakina:session-unverified', { detail: result }))
+          throw new ApiError(0, 'تعذّر التحقق من الجلسة.', undefined, 'session_unverified', { recovery: result })
+        }
       }
       expireSession(generation)
     }

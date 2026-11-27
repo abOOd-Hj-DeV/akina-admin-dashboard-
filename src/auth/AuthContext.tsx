@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode, useRef } from 'react'
 import type { Role } from '../types'
 import { loginApi, logoutAllApi, logoutApi, resendLogin2faApi, restoreSessionApi, verifyLogin2faApi } from '../api/auth'
-import { API_MOCK, assertSession, tokenStore } from '../api/client'
+import { API_MOCK, assertSession, tokenStore, type Recovery } from '../api/client'
 import type { ApiRole, ApiUser, AuthResponse } from '../api/types'
 
 const ADMIN_ROLES = new Set<ApiRole>([
@@ -15,6 +15,9 @@ interface AuthState {
   userName: string | null
   /** false أثناء استعادة الجلسة من توكن التجديد عند تحميل الصفحة */
   ready: boolean
+  recovery: Recovery | null
+  retryRestore: () => void
+  restartLogin: () => void
   /** دخول تجريبي (وضع الـmock) */
   login: (role: Role) => void
   /** دخول حقيقي عبر /api/v1/auth/login — يقبل أدوار الإدارة فقط؛ يرجع '2fa' إذا أُرسل رمز تحقق */
@@ -31,6 +34,7 @@ interface AuthState {
 const Ctx = createContext<AuthState>({
   role: null, userId: null, userName: null, ready: true, login: () => {}, apiLogin: async () => 'admin', apiVerify2fa: async () => 'admin',
   apiResend2fa: async () => {}, logout: () => {}, logoutAll: async () => {},
+  recovery: null, retryRestore: () => {}, restartLogin: () => {},
 })
 
 const clearSessionKeys = () => {
@@ -44,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string | null>(() => (API_MOCK ? sessionStorage.getItem('sakina-user-name') : null))
   const [userId, setUserId] = useState<string | null>(null)
   const [ready, setReady] = useState<boolean>(() => API_MOCK || !tokenStore.getRefresh())
+  const [recovery, setRecovery] = useState<Recovery | null>(null)
   const challengeRef = useRef<string | null>(null)
 
   const applyUser = (user: ApiUser): Role => {
@@ -66,32 +71,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null)
     setUserId(null)
     setUserName(null)
+    setRecovery(null)
     setReady(true)
+  }
+
+  const startRestore = (isLive = () => true) => {
+    const generation = tokenStore.generation()
+    setReady(false)
+    setRecovery(null)
+    void restoreSessionApi().then((result) => {
+      if (!isLive() || generation !== tokenStore.generation()) return
+      if (result && 'recovery' in result) {
+        setRecovery(result.recovery)
+        return
+      }
+      try {
+        if (result) applyUser(result)
+        else reset()
+      } catch { reset() }
+      setReady(true)
+    })
   }
 
   useEffect(() => {
     if (API_MOCK) return
     if (!tokenStore.getRefresh()) { clearSessionKeys(); return }
-    const generation = tokenStore.generation()
     let live = true
-    void restoreSessionApi().then((user) => {
-      if (!live || generation !== tokenStore.generation()) return
-      try {
-        if (user) applyUser(user)
-        else reset()
-      } catch { reset() }
-      setReady(true)
-    })
+    startRestore(() => live)
     return () => { live = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 401 من أي استدعاء API (بعد فشل التجديد) → إنهاء الجلسة
   useEffect(() => {
     const onUnauth = () => reset()
+    const onUnverified = (event: Event) => {
+      reset()
+      setReady(false)
+      setRecovery((event as CustomEvent<Recovery>).detail)
+    }
     window.addEventListener('sakina:unauthenticated', onUnauth)
-    return () => window.removeEventListener('sakina:unauthenticated', onUnauth)
+    window.addEventListener('sakina:session-unverified', onUnverified)
+    return () => {
+      window.removeEventListener('sakina:unauthenticated', onUnauth)
+      window.removeEventListener('sakina:session-unverified', onUnverified)
+    }
   }, [])
+
+  useEffect(() => {
+    if (recovery !== 'retry') return
+    const onOnline = () => startRestore()
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recovery])
 
   const login = (r: Role) => {
     sessionStorage.setItem('sakina-role', r)
@@ -139,6 +171,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     reset()
   }
 
+  const restartLogin = () => {
+    tokenStore.clear()
+    reset()
+  }
+
   const logoutAll = async () => {
     const generation = tokenStore.generation()
     await logoutAllApi()
@@ -147,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ role, userId, userName, ready, login, apiLogin, apiVerify2fa, apiResend2fa, logout, logoutAll }}>
+    <Ctx.Provider value={{ role, userId, userName, ready, recovery, retryRestore: () => startRestore(), restartLogin, login, apiLogin, apiVerify2fa, apiResend2fa, logout, logoutAll }}>
       {children}
     </Ctx.Provider>
   )

@@ -49,3 +49,37 @@ it.each([200, 500])('keeps the newly signed-in account visible when old logout r
     await view.unmount()
   }
 })
+
+it('blocks protected content while offline and restores on the online event', async () => {
+  const [{ AuthProvider, useAuth }, { default: SessionRecovery }] = await Promise.all([
+    import('./AuthContext'),
+    import('../components/SessionRecovery'),
+  ])
+  const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+  sessionStorage.setItem('sakina-refresh', 'old-refresh')
+  sessionStorage.setItem('sakina-user-name', 'old name must not be rendered')
+  const user = { id: 'staff', name: 'confirmed account', role: 'admin' }
+  const fetch = vi.fn()
+    .mockResolvedValueOnce(json({ access_token: 'new-access', refresh_token: 'new-refresh' }))
+    .mockResolvedValueOnce(json({ user }))
+  vi.stubGlobal('fetch', fetch)
+  function ProtectedContent() {
+    const auth = useAuth()
+    return auth.ready && auth.role ? <span>{auth.userName}</span> : <SessionRecovery />
+  }
+  const view = mount()
+  try {
+    await view.render(<AuthProvider><ProtectedContent /></AuthProvider>)
+    expect(view.container.textContent).toContain('تعذّر التحقق من الجلسة مؤقتاً')
+    expect(view.container.textContent).not.toContain('old name must not be rendered')
+    expect(sessionStorage.getItem('sakina-refresh')).toBe('old-refresh')
+    expect(fetch).not.toHaveBeenCalled()
+    online.mockReturnValue(true)
+    await act(async () => window.dispatchEvent(new Event('online')))
+    expect(view.container.textContent).toBe('confirmed account')
+    expect(fetch).toHaveBeenCalledTimes(2)
+  } finally {
+    vi.restoreAllMocks()
+    await view.unmount()
+  }
+})

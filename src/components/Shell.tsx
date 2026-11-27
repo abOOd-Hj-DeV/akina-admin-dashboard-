@@ -7,6 +7,7 @@ import { adminApi } from '../api/admin'
 import { useAsync } from '../hooks/useAsync'
 import { DataState } from './ui'
 import Icon from './Icon'
+import SessionRecovery from './SessionRecovery'
 import { formatAdminDate } from '../lib/format-date'
 
 const TITLE_FOR: Record<string, string> = { 'patient-profile': 'ملف المريض', account: 'حسابي' }
@@ -45,7 +46,7 @@ export default function Shell() {
   }, [])
 
   const items = useMemo(() => (role ? NAV.filter((n) => canView(role, n.screen)) : []), [role])
-  if (!ready) return <div className="auth-page" role="status">جارٍ استعادة الجلسة…</div>
+  if (!ready) return <SessionRecovery />
   if (!role) return <Navigate to="/login" replace />
 
   const title = titleFor(pathname)
