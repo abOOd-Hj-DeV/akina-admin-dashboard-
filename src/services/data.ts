@@ -293,10 +293,17 @@ export const listFaqs = (): Promise<ApiFaq[]> =>
     { id: 'F-2', question: 'متى تُفعّل الباقة؟', answer: 'بعد مراجعة الإيصال خلال 24 ساعة.' },
   ]) : fetchPages(page => adminApi.faqs({ page }))
 
-export const getPatient = (id?: string | null): Promise<Patient | null> => {
+export const getPatient = (id?: string | null): Promise<(Patient & { therapistName?: string | null }) | null> => {
   if (!id) return wait(null)
-  if (API_MOCK) return wait(mock.patients.find(patient => patient.id === id) ?? null)
-  return adminApi.patient(id).then(response => mapPatient(response.data))
+  if (API_MOCK) {
+    const patient = mock.patients.find(patient => patient.id === id)
+    if (!patient) return wait(null)
+    return wait({ ...patient, therapistName: mock.therapists.find(therapist => therapist.id === patient.therapistId)?.full_name })
+  }
+  return adminApi.patient(id).then(({ data }) => ({
+    ...mapPatient(data),
+    therapistName: data.therapist === null ? null : data.therapist?.full_name?.trim() || undefined,
+  }))
 }
 
 export interface FeedItem { text: string; by: string; at: string; dot: string }

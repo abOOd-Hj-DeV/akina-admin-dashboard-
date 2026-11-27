@@ -2,7 +2,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { getPatient, listRedFlags, listTherapistNames } from '../services/data'
+import { getPatient, listRedFlags } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { API_MOCK } from '../api/client'
 import { Badge, Btn, Card, DataState, PageHeader, ProgressBar } from '../components/ui'
@@ -41,12 +41,6 @@ export default function PatientProfile() {
     { interval: 15_000 },
   )
   const redFlags = flagData ?? []
-  const canListTherapists = role === 'admin' || role === 'super_admin'
-  const { data: therapistData } = useAsync(
-    canListTherapists ? listTherapistNames : () => Promise.resolve([]),
-    [role, canListTherapists],
-  )
-  const therapists = therapistData ?? []
   const a = role ? access(role, 'patient-profile') : { level: 'denied' as const }
   const anon = a.mask === 'no-identity'
   const limited = a.mask === 'no-clinical'
@@ -118,7 +112,7 @@ export default function PatientProfile() {
           )}
           {tabs[tab] === 'المعالج والبرنامج' && (
             <div className="grid grid-cols-2 gap-4 text-[14px] md:grid-cols-4">
-              <Field k="المعالج الحالي" v={therapists.find((t) => t.id === p.therapistId)?.name ?? p.therapistId} />
+              <Field k="المعالج الحالي" v={p.therapistName === null ? 'لا يوجد معالج معيّن' : p.therapistName ?? 'اسم المعالج غير متاح'} />
               {API_MOCK && <Field k="البرنامج" v="برنامج إدارة القلق العام" />}
               {API_MOCK && <Field k="الوحدة الحالية" v="الوحدة 3 — إدارة الأفكار" />}
               {API_MOCK && <Field k="الجلسة القادمة" v={formatAdminDate("2025-11-23")} />}
