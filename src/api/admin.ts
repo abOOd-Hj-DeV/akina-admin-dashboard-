@@ -2,9 +2,10 @@
 import { api } from './client'
 import type { LaravelPaginator, Page } from './client'
 import type {
-  ApiAdminPatient, ApiAdminPatientDetail, ApiAdminTherapist, ApiAdminUser,
+  ApiAdminPatient, ApiAdminPatientDetail, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAdminUser,
   ApiAuditEntry, ApiDocument, ApiFaq, ApiOverview, ApiPayment,
   ApiProgram, ApiRedFlag, ApiRedFlagCounts, ApiRedFlagStats, ApiSupportTicket, ApiWithdrawal, CreateUserBody,
+  DocumentType, TherapistFilter, TherapistOptions,
 } from './types'
 
 const qs = (params: Record<string, string | number | boolean | undefined>) => {
@@ -24,10 +25,15 @@ export const adminApi = {
     api.get<Page<ApiAdminPatient>>(`/api/v1/admin/patients${qs(f)}`),
   patient: (id: string) => api.get<{ data: ApiAdminPatientDetail }>(`/api/v1/admin/patients/${id}`),
 
-  // المعالجون — admin, super_admin فقط
-  therapists: () => api.get<Page<ApiAdminTherapist>>('/api/v1/admin/therapists'),
-  approveTherapist: (id: string) => api.post(`/api/v1/admin/therapists/${id}/approve`),
-  rejectTherapist: (id: string, body?: { reason?: string }) => api.post(`/api/v1/admin/therapists/${id}/reject`, body ?? {}),
+  therapists: (f: { status: TherapistFilter; q?: string; page: number; per_page?: number }) =>
+    api.get<Required<Page<ApiAdminTherapist>>>(`/api/v1/admin/therapists${qs(f)}`),
+  therapist: (id: string) => api.get<{ data: ApiAdminTherapistDetail }>(`/api/v1/admin/therapists/${id}`),
+  therapistLicense: (id: string) => api.getBlob(`/api/v1/admin/therapists/${id}/license`),
+  therapistOptions: () => api.get<{ data: TherapistOptions }>('/api/v1/meta/therapist-options'),
+  approveTherapist: (id: string, body: { revision_id: string; note?: string }) =>
+    api.post(`/api/v1/admin/therapists/${id}/approve`, body, false),
+  rejectTherapist: (id: string, body: { revision_id: string; note: string }) =>
+    api.post(`/api/v1/admin/therapists/${id}/reject`, body, false),
   setClientsLimit: (id: string, clients_limit: number) =>
     api.put(`/api/v1/admin/therapists/${id}/clients-limit`, { clients_limit }),
 
@@ -52,7 +58,7 @@ export const adminApi = {
   ) => api.post<{ message: string; data: ApiRedFlag }>(`/api/v1/admin/red-flags/${id}/decision`, body),
 
   // البرامج — + clinical_supervisor
-  programs: () => api.get<Page<ApiProgram>>('/api/v1/admin/programs'),
+  programs: (f: { page?: number } = {}) => api.get<Page<ApiProgram>>(`/api/v1/admin/programs${qs(f)}`),
   createProgram: (body: { name: string; description: string; is_core?: boolean }) =>
     api.post<{ message: string; program: ApiProgram }>('/api/v1/admin/programs', body),
   updateProgram: (id: string, body: Partial<{ name: string; description: string; is_core: boolean }>) =>
@@ -63,6 +69,8 @@ export const adminApi = {
   // طلبات الملفات — admin, super_admin فقط
   documents: (page?: number) => api.get<Page<ApiDocument>>(`/api/v1/admin/documents${qs({ page })}`),
   document: (id: string) => api.get<{ data: ApiDocument }>(`/api/v1/admin/documents/${id}`),
+  requestDocument: (body: { user_id: string; doc_type: DocumentType; reason?: string }) =>
+    api.post<{ data: ApiDocument }>('/api/v1/admin/documents', body),
   reviewDocument: (id: string, action: 'approve' | 'reject', note?: string) =>
     api.post(`/api/v1/admin/documents/${id}/review`, { action, note }),
 
@@ -84,7 +92,7 @@ export const adminApi = {
     api.post(`/api/v1/admin/therapist-switches/${id}/review`, { action, note }),
 
   // الأسئلة الشائعة — + content_manager
-  faqs: () => api.get<Page<ApiFaq>>('/api/v1/admin/faqs'),
+  faqs: (f: { page?: number } = {}) => api.get<Page<ApiFaq>>(`/api/v1/admin/faqs${qs(f)}`),
   createFaq: (body: { question: string; answer: string; sort_order?: number }) => api.post('/api/v1/admin/faqs', body),
   updateFaq: (id: string, body: Partial<{ question: string; answer: string; sort_order: number }>) =>
     api.put(`/api/v1/admin/faqs/${id}`, body),

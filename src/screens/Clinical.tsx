@@ -3,14 +3,21 @@ import { access } from '../auth/permissions'
 import { listRedFlags } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { API_MOCK } from '../api/client'
-import { Badge, Banner, Btn, Card, PageHeader } from '../components/ui'
+import { Badge, Banner, Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 
 /** الإشراف الإكلينيكي: المشرف كامل، المدير الرئيسي قراءة فقط */
 export default function Clinical() {
   const { role } = useAuth()
   const a = role ? access(role, 'clinical') : { level: 'denied' as const }
-  const { data: redFlags = [] } = useAsync(listRedFlags)
+  const redFlagAccess = role ? access(role, 'red-flags') : { level: 'denied' as const }
+  const canListRedFlags = redFlagAccess.level === 'full'
+  const { data, loading, error, reload } = useAsync(
+    canListRedFlags ? listRedFlags : () => Promise.resolve([]),
+    [role, canListRedFlags],
+    { interval: 15_000 },
+  )
+  const redFlags = data ?? []
   const full = a.level === 'full'
   const critical = redFlags.filter((r) => r.level === 'حرج' || r.level === 'عالي')
 
@@ -23,9 +30,7 @@ export default function Clinical() {
       {critical.length > 0 && <Banner tone="red"><Icon name="warn" size={14} className="ms-1 inline" /> هناك {critical.length} حالة حرجة تحتاج تدخلاً فورياً</Banner>}
 
       <div className="space-y-4">
-        {redFlags.length === 0 && (
-          <Card className="py-10 text-center text-[14px] text-[#657381]">لا توجد تنبيهات حالياً</Card>
-        )}
+        <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && redFlags.length === 0} onRetry={reload} />
         {redFlags.map((f) => (
           <Card key={f.id} className="flex items-start gap-4">
             <span className="mt-1 text-red-500"><Icon name="flag" size={20} /></span>

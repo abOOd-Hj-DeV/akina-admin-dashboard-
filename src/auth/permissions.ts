@@ -21,7 +21,6 @@ export interface Access {
     | 'escalate'      // support: رفع للمدير
     | 'clinical'      // supervisor: التقارير السريرية فقط
     | 'earnings'      // finance: تقارير أرباحه فقط
-    | 'invite-only'   // supervisor: دعوة معالج فقط بدون عرض القائمة
 }
 
 type Matrix = Record<Role, Partial<Record<Screen, Access>>>
@@ -41,7 +40,7 @@ export const MATRIX: Matrix = {
   admin: {
     dashboard: m('limited', 'ops'),
     patients: m('limited', 'no-clinical'), 'patient-profile': m('limited', 'no-clinical'),
-    therapists: m('limited', 'ops'),
+    therapists: m('read'),
     payments: m('full'), programs: m('read'), 'doc-requests': m('full'),
     'red-flags': m('limited', 'alert'), reports: m('limited', 'ops'),
     audit: m('read'), tickets: m('read'), faqs: m('full'), users: m('full'),
@@ -51,8 +50,7 @@ export const MATRIX: Matrix = {
     patients: m('limited', 'no-identity'), 'patient-profile': m('limited', 'no-identity'),
     clinical: m('full'), programs: m('full'), 'red-flags': m('full'),
     reports: m('limited', 'clinical'), tickets: m('read'), users: m('full'),
-    // الـAPI يمنع قائمة المعالجين وطلبات الملفات؛ يسمح له فقط بدعوة معالج عبر POST /admin/users
-    therapists: m('limited', 'invite-only'),
+    therapists: m('full'),
   },
   finance_partner: {
     dashboard: m('limited', 'earnings'),
@@ -116,3 +114,7 @@ export const INVITABLE_STAFF_ROLES: Partial<Record<Role, Role[]>> = {
 /** دعوة معالج (role=therapist + therapist.*) من شاشة المعالجين */
 export const THERAPIST_INVITERS: Role[] = ['super_admin', 'admin', 'clinical_supervisor']
 export const canInviteTherapist = (role: Role | null | undefined) => !!role && THERAPIST_INVITERS.includes(role)
+
+export const canDecideTherapist = (role: Role | null) => role === 'super_admin' || role === 'clinical_supervisor'
+export const canToggleTherapist = canDecideTherapist
+export const canRequestTherapistDocument = (role: Role | null) => role === 'super_admin'

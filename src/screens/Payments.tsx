@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
 import { listPayments, reviewPayment } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
-import { Badge, Banner, Btn, Card, PageHeader } from '../components/ui'
+import { Badge, Banner, Btn, Card, DataState, DataValue, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 
 /** مراجعة الحوالات: SuperAdmin+Admin كامل، الشريك المالي حوالاته فقط */
@@ -11,7 +11,8 @@ export default function Payments() {
   const { role } = useAuth()
   const a = role ? access(role, 'payments') : { level: 'denied' as const }
   const ownOnly = a.mask === 'own'
-  const { data: all = [] } = useAsync(listPayments)
+  const { data, loading, error, reload } = useAsync(listPayments)
+  const all = data ?? []
   const list = ownOnly ? all.filter((p) => p.partner) : all
   const [done, setDone] = useState<Record<string, 'approved' | 'rejected'>>({})
   const [err, setErr] = useState<string | null>(null)
@@ -34,9 +35,10 @@ export default function Payments() {
         sub={ownOnly ? 'عرض حوالاتك المرتبطة بشراكتك فقط' : undefined}
       />
       {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}
-      <Banner tone="amber"><Icon name="clock" size={14} className="ms-1 inline" /> متوسط وقت التحقق: 12 ساعة — {ownOnly ? pending.length : 24} حوالة بانتظار المراجعة</Banner>
+      <Banner tone="amber"><Icon name="clock" size={14} className="ms-1 inline" /> متوسط وقت التحقق: 12 ساعة — <DataValue loading={loading} error={error} value={pending.length} /> حوالة بانتظار المراجعة</Banner>
 
       <div className="space-y-4">
+        <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && list.length === 0} onRetry={reload} />
         {list.map((p) => {
           const state = done[p.id]
           return (

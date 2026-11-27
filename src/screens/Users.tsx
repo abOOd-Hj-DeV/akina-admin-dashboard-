@@ -7,7 +7,7 @@ import { adminApi } from '../api/admin'
 import type { ApiAdminUser } from '../api/types'
 import type { Role } from '../types'
 import { useAsync } from '../hooks/useAsync'
-import { Badge, Btn, Card, PageHeader, Table } from '../components/ui'
+import { Badge, Btn, Card, DataState, PageHeader, Table } from '../components/ui'
 import InviteUserForm from '../components/InviteUserForm'
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
@@ -27,7 +27,7 @@ export default function Users() {
   const canEdit = a.level === 'full' && staffRoles.length > 0
   const [page, setPage] = useState(1)
   const [revision, setRevision] = useState(0)
-  const { data, loading, error } = useAsync(
+  const { data, loading, error, reload: refresh } = useAsync(
     () => (API_MOCK ? Promise.resolve({ data: MOCK_USERS, last_page: 1 }) : adminApi.users({ page })),
     [page, revision],
   )
@@ -80,8 +80,7 @@ export default function Users() {
       {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}
       {notice && <p role="status">{notice}</p>}
       {working && <p role="status">جارٍ تحديث الدعوة…</p>}
-      {loading && <p role="status">جارٍ تحميل الحسابات…</p>}
-      {error && <p role="alert">تعذّر تحميل الحسابات.</p>}
+      <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && users.length === 0} onRetry={refresh} />
       {adding && (
         <InviteUserForm roles={staffRoles} onCancel={() => setAdding(false)} onDone={() => { setAdding(false); setPage(1); reload() }} />
       )}
@@ -91,7 +90,7 @@ export default function Users() {
             <tr key={u.id} className="border-t border-gray-50">
               <td className="px-3 py-3 font-medium text-[#0a0a0a]">{u.name}</td>
               <td className="px-3 py-3 text-[#0a0a0a]" dir="ltr">{u.whatsapp_number || '—'}</td>
-              <td className="px-3 py-3 text-[#657381]" dir="ltr">{u.email}</td>
+              <td className="px-3 py-3 text-[#657381]" dir="ltr">{u.email ?? '—'}</td>
               <td className="px-3 py-3"><Badge tone="purple">{u.role in ROLE_LABELS ? ROLE_LABELS[u.role as Role] : u.role}</Badge></td>
               <td className="px-3 py-3"><Badge tone={u.is_active ? 'green' : 'gray'}>{u.pending_invitation ? 'دعوة معلّقة' : u.is_active ? 'نشط' : 'معطّل'}</Badge></td>
               <td className="px-3 py-3 text-[12px] text-[#657381]">{u.created_at?.slice(0, 10)}</td>

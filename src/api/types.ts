@@ -117,16 +117,79 @@ export interface ApiRedFlagStats {
 
 export type ApiRedFlagCounts = Record<'open' | 'resolved', Record<ApiRedFlag['priority'], number>>
 
-export interface ApiAdminTherapist {
+export type TherapistApproval = 'pending' | 'approved' | 'rejected'
+export type TherapistFilter = 'all' | 'not_submitted' | 'changes_pending' | TherapistApproval
+
+export interface TherapistProfile {
+  full_name: string | null
+  job_title: string | null
+  specialty: string | null
+  bio: string | null
+  email: string | null
+  city: string | null
+  country: string | null
+  languages: string[] | null
+  years_of_experience: number | null
+}
+
+export interface TherapistRevisionSummary {
+  id: string
+  kind: 'initial' | 'update'
+  submitted_at: string
+}
+
+export type TherapistProfileChanges = {
+  [Field in keyof TherapistProfile]?: { old: TherapistProfile[Field]; new: TherapistProfile[Field] }
+}
+
+export interface TherapistRevision extends TherapistRevisionSummary {
+  status: 'pending' | 'approved' | 'rejected' | 'superseded'
+  data: TherapistProfile
+  changes?: TherapistProfileChanges
+}
+
+export interface TherapistLastReview {
+  revision_id: string
+  kind: TherapistRevisionSummary['kind']
+  status: 'approved' | 'rejected'
+  note: string | null
+  reviewed_at: string
+}
+
+export interface ApiAdminTherapist extends TherapistProfile {
   id: string
   full_name: string
-  email: string
-  approval_status: 'pending' | 'approved' | 'rejected'
+  application_ref: string | null
+  has_license: boolean
+  pending_revision: TherapistRevisionSummary | null
+  rating: number | string | null
+  approval_status: TherapistApproval | null
+  can_accept_new_clients: boolean
+  availability: unknown
   clients_count: number
-  clients_limit?: number | null
-  rating?: number | null
+  clients_limit: number | null
   is_active: boolean
-  joined_at?: string
+  whatsapp_number: string | null
+  created_at: string
+  approval_note: string | null
+  submitted_at: string | null
+}
+
+export interface ApiAdminTherapistDetail extends ApiAdminTherapist {
+  published: TherapistProfile
+  pending_revision: TherapistRevision | null
+  last_review: TherapistLastReview | null
+}
+
+export interface TherapistOption {
+  code: string
+  name_ar: string
+}
+
+export interface TherapistOptions {
+  countries: TherapistOption[]
+  languages: TherapistOption[]
+  specialties: TherapistOption[]
 }
 
 /** SupportService::toArray — لا priority ولا requester؛ النوع type والمُرسل user */
@@ -146,6 +209,8 @@ export interface ApiSupportTicket {
 }
 
 /** DocumentRequestService::toArray (staff view) */
+export type DocumentType = 'license' | 'identity' | 'certificate' | 'payment_proof' | 'support_file' | 'other'
+
 export interface ApiDocument {
   id: string
   doc_type: string
@@ -208,7 +273,7 @@ export interface ApiProgram {
 export interface ApiAdminUser {
   id: string
   name: string
-  email: string
+  email: string | null
   /** رقم واتساب بصيغة E.164 — معرّف تسجيل الدخول */
   whatsapp_number?: string
   role: ApiRole
@@ -220,10 +285,10 @@ export interface ApiAdminUser {
 }
 
 /** POST /admin/users — UserAccountController::store */
-export interface CreateUserBody {
+export type CreateUserBody = {
   name: string
-  email: string
   whatsapp_number: string
-  role: ApiRole
-  therapist?: { specialty: string; country: string; languages?: string[]; full_name?: string }
-}
+} & (
+  | { role: 'therapist'; therapist: { application_ref: string } }
+  | { role: Exclude<ApiRole, 'therapist'>; email: string }
+)

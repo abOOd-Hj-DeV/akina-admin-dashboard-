@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
 import { decideRedFlag, countOpenRedFlags, listRedFlags } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
-import { Badge, Banner, Btn, Card, PageHeader } from '../components/ui'
+import { Badge, Banner, Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 import { formatRedFlagDate } from '../lib/format-date'
 import type { RedFlag } from '../types'
@@ -25,14 +25,18 @@ export default function RedFlags() {
   const a = role ? access(role, 'red-flags') : { level: 'denied' as const }
   const alertOnly = a.mask === 'alert'
   const full = a.level === 'full'
+  const canList = a.level === 'full'
   const [revision, setRevision] = useState(0)
-  const { data: redFlags = [], loading, error } = useAsync(
-    !alertOnly && a.level !== 'denied' ? listRedFlags : () => Promise.resolve([]),
+  const { data, loading, error, reload } = useAsync(
+    canList ? listRedFlags : () => Promise.resolve([]),
     [role, revision],
+    { interval: 15_000 },
   )
+  const redFlags = data ?? []
   const { data: openCount, loading: countsLoading, error: countsError } = useAsync(
     a.level !== 'denied' ? countOpenRedFlags : () => Promise.resolve(undefined),
     [role, revision],
+    { interval: 15_000 },
   )
 
   const countNotice = countsLoading
@@ -61,11 +65,7 @@ export default function RedFlags() {
       {(countsLoading || countsError || !!openCount) && (
         <Banner tone="red"><Icon name="warn" size={14} className="ms-1 inline" /> {countNotice}</Banner>
       )}
-      {loading && <p role="status">جارٍ تحميل الحالات…</p>}
-      {error && <p role="alert">تعذّر تحميل قائمة الحالات.</p>}
-      {!loading && !error && redFlags.length === 0 && (
-        <Card><p className="text-[14px] text-[#657381]">لا توجد حالات خطر مفتوحة.</p></Card>
-      )}
+      <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && redFlags.length === 0} onRetry={reload} />
       <div className="space-y-4">
         {redFlags.map((flag) => (
           <RedFlagCard

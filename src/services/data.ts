@@ -5,16 +5,19 @@
  *   غير ذلك (الوضع الحالي)                    → بيانات mock من ../data/mock
  * عند الربط: لا تغيير في الشاشات — فقط تفعّل المتغيرات.
  */
-import { API_MOCK } from '../api/client'
+import { API_MOCK, ApiError } from '../api/client'
 import { adminApi } from '../api/admin'
 import type {
-  ApiAdminPatient, ApiAdminTherapist, ApiAuditEntry, ApiDocument,
+  ApiAdminPatient, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAuditEntry, ApiDocument,
   ApiFaq, ApiOverview, ApiPayment, ApiProgram, ApiRedFlag, ApiSupportTicket, ApiWithdrawal,
+  CreateUserBody,
 } from '../api/types'
 import type {
-  AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Therapist, Ticket,
+  AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Ticket,
 } from '../types'
 import * as mock from '../data/mock'
+import { THERAPIST_OPTIONS } from '../data/therapistOptions'
+import { APPLICATION_REF_TAKEN } from '../lib/invite'
 
 const wait = <T>(v: T) => Promise.resolve(v)
 
@@ -32,16 +35,6 @@ const mapPatient = (p: ApiAdminPatient): Patient => ({
   compliance: COMPLIANCE_PCT[p.compliance_level],
   lastActivity: p.last_login ?? '—',
   needsReport: p.compliance_level === 'low',
-})
-
-const THERAPIST_STATUS = { pending: 'قيد المراجعة', approved: 'معتمد', rejected: 'معلّق' } as const
-const mapTherapist = (t: ApiAdminTherapist): Therapist => ({
-  id: t.id,
-  name: t.full_name,
-  status: THERAPIST_STATUS[t.approval_status] ?? 'قيد المراجعة',
-  patients: t.clients_count,
-  rating: t.rating ?? undefined,
-  joined: t.joined_at ?? '',
 })
 
 const PAYMENT_STATUS = { pending: 'قيد المراجعة', approved: 'تمت الموافقة', rejected: 'مرفوض' } as const
@@ -79,7 +72,11 @@ export const mapFlag = (f: ApiRedFlag): RedFlag => ({
 })
 
 const DOC_STATUS = { requested: 'قيد المراجعة', submitted: 'قيد المراجعة', pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض' } as const
-const DOC_TYPE: Record<string, string> = { license: 'رخصة مزاولة', id: 'إثبات هوية', certificate: 'شهادة', other: 'مستند' }
+export const DOCUMENT_TYPES = {
+  license: 'رخصة مزاولة', identity: 'إثبات هوية', certificate: 'شهادة',
+  payment_proof: 'إثبات دفع', support_file: 'ملف داعم', other: 'مستند آخر',
+} as const
+const DOC_TYPE: Record<string, string> = { ...DOCUMENT_TYPES, id: DOCUMENT_TYPES.identity }
 const mapDoc = (d: ApiDocument): DocRequest => ({
   id: d.id,
   subject: DOC_TYPE[d.doc_type] ?? d.doc_type ?? 'مستند',
@@ -126,31 +123,121 @@ const mapWithdrawal = (w: ApiWithdrawal): Withdrawal => ({
 
 /* ---------- القراءات ---------- */
 
-export const listPatients = (f?: Parameters<typeof adminApi.patients>[0]) =>
-  API_MOCK ? wait(mock.patients) : adminApi.patients(f).then(r => r.data.map(mapPatient))
+const fetchPages = async <T>(
+  fetch: (page: number) => Promise<{ data: T[]; pagination?: { current_page: number; last_page: number } }>,
+): Promise<T[]> => {
+  const records: T[] = []
+  let lastPage = 1
 
-export const listTherapists = () =>
-  API_MOCK ? wait(mock.therapists) : adminApi.therapists().then(r => r.data.map(mapTherapist))
+  for (let page = 1; page <= lastPage; page++) {
+    const response = await fetch(page)
+    const pagination = response.pagination
+    if (!Array.isArray(response.data) || !pagination || !Number.isInteger(pagination.current_page)
+      || !Number.isInteger(pagination.last_page)
+      || pagination.last_page < 1 || pagination.last_page > 1000
+      || pagination.current_page !== page) {
+      throw new Error('تعذّر تحميل البيانات بسبب ترقيم صفحات غير صالح.')
+    }
+    if (page === 1) lastPage = pagination.last_page
+    else if (pagination.last_page !== lastPage) throw new Error('تعذّر تحميل البيانات بسبب ترقيم صفحات غير متّسق.')
+    records.push(...response.data)
+  }
+
+  return records
+}
+
+const fetchTicketPages = async (): Promise<ApiSupportTicket[]> => {
+  const records: ApiSupportTicket[] = []
+  let lastPage = 1
+
+  for (let page = 1; page <= lastPage; page++) {
+    const paginator = (await adminApi.tickets({ page })).data
+    if (!paginator || !Array.isArray(paginator.data) || !Number.isInteger(paginator.current_page)
+      || !Number.isInteger(paginator.last_page)
+      || paginator.last_page < 1 || paginator.last_page > 1000
+      || paginator.current_page !== page) {
+      throw new Error('تعذّر تحميل البيانات بسبب ترقيم صفحات غير صالح.')
+    }
+    if (page === 1) lastPage = paginator.last_page
+    else if (paginator.last_page !== lastPage) throw new Error('تعذّر تحميل البيانات بسبب ترقيم صفحات غير متّسق.')
+    records.push(...paginator.data)
+  }
+
+  return records
+}
+
+export const listPatients = (f?: Parameters<typeof adminApi.patients>[0]) =>
+  API_MOCK ? wait(mock.patients) : fetchPages(page => adminApi.patients({ ...f, page })).then(rows => rows.map(mapPatient))
+
+export async function listTherapists(f: Parameters<typeof adminApi.therapists>[0]) {
+  if (!API_MOCK) return adminApi.therapists(f)
+  const { status, q, page, per_page = 15 } = f
+  const query = q?.trim().toLowerCase()
+  const rows = mock.therapists.filter(t => {
+    const matchesStatus = status === 'changes_pending'
+      ? t.approval_status === 'approved' && t.pending_revision?.kind === 'update'
+      : status === 'all' || (t.approval_status ?? 'not_submitted') === status
+    return matchesStatus && (!query || t.application_ref?.toLowerCase() === query
+      || t.full_name.toLowerCase().includes(query) || t.whatsapp_number?.includes(query))
+  })
+  const data = rows.slice((page - 1) * per_page, page * per_page)
+    .map(({ published: _published, last_review: _lastReview, pending_revision: revision, ...row }): ApiAdminTherapist => ({
+      ...row,
+      pending_revision: revision ? { id: revision.id, kind: revision.kind, submitted_at: revision.submitted_at } : null,
+    }))
+  return {
+    data,
+    pagination: { current_page: page, last_page: Math.max(1, Math.ceil(rows.length / per_page)), total: rows.length },
+  }
+}
+
+export const listTherapistNames = () =>
+  (API_MOCK ? wait(mock.therapists) : fetchPages(page => listTherapists({ status: 'all', page })))
+    .then(rows => rows.map(({ id, full_name }) => ({ id, name: full_name })))
+
+function getMockTherapist(id: string): ApiAdminTherapistDetail {
+  const row = mock.therapists.find(t => t.id === id)
+  if (!row) throw new ApiError(404, 'المعالج غير موجود.')
+  return row
+}
+
+export const getTherapist = async (id: string) =>
+  API_MOCK ? getMockTherapist(id) : (await adminApi.therapist(id)).data
+
+export async function getTherapistOptions() {
+  if (!API_MOCK) {
+    try { return (await adminApi.therapistOptions()).data }
+    catch { return THERAPIST_OPTIONS }
+  }
+  return THERAPIST_OPTIONS
+}
+
+export async function getTherapistLicense(id: string) {
+  if (!API_MOCK) return adminApi.therapistLicense(id)
+  if (!getMockTherapist(id).has_license) throw new ApiError(404, 'الرخصة غير متاحة.')
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAFAAAAAkAQAAAAA22YDXAAAAQklEQVR42mNgQID6/1DwjwkhODiY/+W5LihARS98+H8ByuRg+M8BU8v4AK5NAWHCAzjzB8PBH1CmgSCjwWDxMRIAAEZPHuV69ABjAAAAAElFTkSuQmCC'
+  return new Blob([Uint8Array.from(atob(png), c => c.charCodeAt(0))], { type: 'image/png' })
+}
 
 export const listPayments = () =>
-  API_MOCK ? wait(mock.payments) : adminApi.payments().then(r => r.data.map(mapPayment))
+  API_MOCK ? wait(mock.payments) : fetchPages(page => adminApi.payments(page)).then(rows => rows.map(mapPayment))
 
 export const listWithdrawals = (): Promise<Withdrawal[]> =>
-  API_MOCK ? wait([]) : adminApi.withdrawals().then(r => r.data.map(mapWithdrawal))
+  API_MOCK ? wait([]) : fetchPages(page => adminApi.withdrawals(page)).then(rows => rows.map(mapWithdrawal))
 
 export const listRedFlags = () =>
-  API_MOCK ? wait(mock.redFlags) : adminApi.redFlags().then(r => r.data.map(mapFlag))
+  API_MOCK ? wait(mock.redFlags) : fetchPages(page => adminApi.redFlags({ page })).then(rows => rows.map(mapFlag))
 
 export const countOpenRedFlags = () =>
   API_MOCK ? wait(mock.redFlags.filter(f => f.level !== 'تم الحل').length)
     : adminApi.redFlagCounts().then(r => Object.values(r.data.open).reduce((sum, count) => sum + count, 0))
 
 export const listDocRequests = () =>
-  API_MOCK ? wait(mock.docRequests) : adminApi.documents().then(r => r.data.map(mapDoc))
+  API_MOCK ? wait(mock.docRequests) : fetchPages(page => adminApi.documents(page)).then(rows => rows.map(mapDoc))
 
 // مسار الدعم يرجع paginator لارافيل خام داخل data (الصفوف في data.data)
 export const listTickets = () =>
-  API_MOCK ? wait(mock.tickets) : adminApi.tickets().then(r => (r.data?.data ?? []).map(mapTicket))
+  API_MOCK ? wait(mock.tickets) : fetchTicketPages().then(rows => rows.map(mapTicket))
 
 // الباك اند لا يملك حالة نشر للبرامج؛ كل برنامج مُعاد من /admin/programs منشور فعلياً
 const mapProgram = (p: ApiProgram): Program => ({
@@ -163,29 +250,35 @@ const mapProgram = (p: ApiProgram): Program => ({
 })
 
 export const listPrograms = () =>
-  API_MOCK ? wait(mock.programs) : adminApi.programs().then(r => r.data.map(mapProgram))
+  API_MOCK ? wait(mock.programs) : fetchPages(page => adminApi.programs({ page })).then(rows => rows.map(mapProgram))
 
 export const getOverview = (): Promise<ApiOverview | null> =>
   API_MOCK ? wait(null) : adminApi.overview().then(r => r.data)
 
 export const listAudit = () =>
-  API_MOCK ? wait(mock.auditLog) : adminApi.audit().then(r => r.data.map(mapAudit))
+  API_MOCK ? wait(mock.auditLog) : fetchPages(page => adminApi.audit({ page })).then(rows => rows.map(mapAudit))
 
 export const listFaqs = (): Promise<ApiFaq[]> =>
   API_MOCK ? wait([
     { id: 'F-1', question: 'كيف أرفع إيصال الحوالة؟', answer: 'من صفحة الاشتراك اختر رفع الإيصال.' },
     { id: 'F-2', question: 'متى تُفعّل الباقة؟', answer: 'بعد مراجعة الإيصال خلال 24 ساعة.' },
-  ]) : adminApi.faqs().then(r => r.data)
+  ]) : fetchPages(page => adminApi.faqs({ page }))
+
+export const getPatient = (id?: string | null): Promise<Patient | null> => {
+  if (!id) return wait(null)
+  if (API_MOCK) return wait(mock.patients.find(patient => patient.id === id) ?? null)
+  return adminApi.patient(id).then(response => mapPatient(response.data))
+}
 
 export interface FeedItem { text: string; by: string; at: string; dot: string }
 
 export const activityFeed = (): Promise<FeedItem[]> =>
   API_MOCK
     ? wait(mock.activityFeed)
-    : adminApi.audit().then(r => r.data.slice(0, 8).map(a => ({
+    : adminApi.audit({ page: 1 }).then(({ data }) => data.slice(0, 8).map(mapAudit).map(a => ({
         text: a.action,
-        by: a.actor?.name ?? 'النظام',
-        at: a.timestamp ?? '',
+        by: a.user,
+        at: a.time,
         dot: '#1d919e',
       })))
 
@@ -194,11 +287,59 @@ export const activityFeed = (): Promise<FeedItem[]> =>
 export const reviewPayment = (id: string, action: 'approve' | 'reject', note?: string) =>
   API_MOCK ? wait(undefined) : adminApi.reviewPayment(id, action, note)
 
-export const approveTherapist = (id: string) =>
-  API_MOCK ? wait(undefined) : adminApi.approveTherapist(id)
+export async function decideTherapist(id: string, revision_id: string, action: 'approve' | 'reject', note: string) {
+  if (!API_MOCK) {
+    if (action === 'approve') return adminApi.approveTherapist(id, { revision_id, ...(note ? { note } : {}) })
+    return adminApi.rejectTherapist(id, { revision_id, note })
+  }
+  const row = getMockTherapist(id)
+  const revision = row.pending_revision
+  if (row.last_review?.revision_id === revision_id) throw new ApiError(409, '', undefined, 'already_decided')
+  if (revision?.id !== revision_id) throw new ApiError(404, '')
+  if (revision.status === 'superseded') throw new ApiError(409, '', undefined, 'revision_superseded')
+  if (revision.status !== 'pending') throw new ApiError(409, '', undefined, 'already_decided')
+  const approved = action === 'approve'
+  const published = approved ? revision.data : row.published
+  if (approved && published.email && mock.therapists.some(t => t.id !== id && t.email?.toLowerCase() === published.email?.toLowerCase())) {
+    throw new ApiError(422, '', { email: ['البريد الإلكتروني مستخدم.'] })
+  }
+  const status = approved ? 'approved' : 'rejected'
+  mock.therapists[mock.therapists.indexOf(row)] = {
+    ...row, ...published, published, full_name: published.full_name ?? row.full_name, pending_revision: null,
+    approval_status: revision.kind === 'initial' ? status : row.approval_status,
+    approval_note: revision.kind === 'initial' ? (approved ? null : note) : row.approval_note,
+    last_review: { revision_id, kind: revision.kind, status, note: note || null, reviewed_at: new Date().toISOString() },
+  }
+}
 
-export const rejectTherapist = (id: string, reason?: string) =>
-  API_MOCK ? wait(undefined) : adminApi.rejectTherapist(id, { reason })
+export async function setTherapistActive(id: string, active: boolean) {
+  if (!API_MOCK) return adminApi.setUserActive(id, active)
+  const row = getMockTherapist(id)
+  mock.therapists[mock.therapists.indexOf(row)] = { ...row, is_active: active }
+}
+
+export async function requestTherapistDocument(body: Parameters<typeof adminApi.requestDocument>[0]) {
+  if (!API_MOCK) return adminApi.requestDocument(body)
+  const row = getMockTherapist(body.user_id)
+  mock.docRequests.unshift({
+    id: crypto.randomUUID(), subject: DOCUMENT_TYPES[body.doc_type], reason: body.reason ?? '',
+    requestedBy: row.full_name, date: new Date().toISOString(), status: 'قيد المراجعة',
+  })
+}
+
+export async function inviteUser(body: CreateUserBody) {
+  if (!API_MOCK) return adminApi.createUser(body)
+  if (body.role === 'therapist') {
+    const { application_ref } = body.therapist
+    if (mock.therapists.some(t => t.application_ref === application_ref)) {
+      throw new ApiError(422, APPLICATION_REF_TAKEN, { 'therapist.application_ref': [APPLICATION_REF_TAKEN] })
+    }
+    mock.therapists.unshift(mock.mockTherapist({
+      id: crypto.randomUUID(), full_name: body.name, approval_status: null, created_at: new Date().toISOString(),
+      whatsapp_number: body.whatsapp_number, application_ref, is_active: false, availability: [],
+    }))
+  }
+}
 
 export const reviewDocument = (id: string, action: 'approve' | 'reject', note?: string) =>
   API_MOCK ? wait(undefined) : adminApi.reviewDocument(id, action, note)

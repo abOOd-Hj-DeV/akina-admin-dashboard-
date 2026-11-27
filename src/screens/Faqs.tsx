@@ -5,14 +5,15 @@ import { API_MOCK } from '../api/client'
 import { adminApi } from '../api/admin'
 import { listFaqs } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
-import { Btn, Card, PageHeader } from '../components/ui'
+import { Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 
 /** الأسئلة الشائعة — المدير + الرئيسي + مدير المحتوى (حسب عقد الـAPI) */
 export default function Faqs() {
   const { role } = useAuth()
   const a = role ? access(role, 'faqs') : { level: 'denied' as const }
-  const { data: faqs = [], reload } = useAsync(listFaqs)
+  const { data, loading, error, reload } = useAsync(listFaqs)
+  const faqs = data ?? []
   const [q, setQ] = useState('')
   const [an, setAn] = useState('')
   const [adding, setAdding] = useState(false)
@@ -54,6 +55,7 @@ export default function Faqs() {
         </Card>
       )}
       <div className="space-y-3">
+        <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && faqs.length === 0} onRetry={reload} />
         {faqs.map((f) => (
           <Card key={f.id} className="flex items-start gap-4">
             <span className="mt-1 text-[#135e66]"><Icon name="doc" size={20} /></span>
@@ -66,7 +68,6 @@ export default function Faqs() {
             )}
           </Card>
         ))}
-        {faqs.length === 0 && <Card className="py-10 text-center text-[14px] text-[#657381]">لا أسئلة بعد</Card>}
       </div>
     </>
   )

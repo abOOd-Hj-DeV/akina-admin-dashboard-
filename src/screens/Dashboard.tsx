@@ -1,9 +1,10 @@
+import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { activityFeed, getOverview, listDocRequests, listPayments, listRedFlags, listTickets, listWithdrawals } from '../services/data'
+import { activityFeed, countOpenRedFlags, getOverview, listDocRequests, listPayments, listTickets, listWithdrawals } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { API_MOCK } from '../api/client'
-import { Badge, Btn, Card, PageHeader, StatCard } from '../components/ui'
+import { Badge, Btn, Card, DataState, DataValue, PageHeader, StatCard } from '../components/ui'
 import Icon from '../components/Icon'
 import { Link } from 'react-router-dom'
 
@@ -18,9 +19,9 @@ const DEMO_KPIS = [
 /** ما يظهر لكل دور في لوحة التحكم حسب الـPDF */
 const SHOW: Record<string, { kpis: number[]; queues: string[]; feed: boolean }> = {
   super_admin: { kpis: [0, 1, 2, 3], queues: ['money', 'clinical', 'ops'], feed: true },
-  admin: { kpis: [0, 1, 2, 3], queues: ['money', 'ops'], feed: true },           // إحصائيات بدون حساسية — بلا Red Flags
-  clinical_supervisor: { kpis: [3], queues: ['clinical'], feed: false },        // Red Flags فقط
-  finance_partner: { kpis: [2, 3], queues: ['money'], feed: false },            // بطاقة أرباحه فقط
+  admin: { kpis: [0, 1, 2, 3], queues: ['money', 'clinical', 'ops'], feed: true }, // أعداد حالات الخطر فقط عبر الإحصاءات
+  clinical_supervisor: { kpis: [], queues: ['clinical'], feed: false },        // Red Flags فقط
+  finance_partner: { kpis: [], queues: ['money'], feed: false },                // بطاقة أرباحه فقط
   support_agent: { kpis: [], queues: ['tickets'], feed: false },                // تنبيهات فنية فقط
 }
 
@@ -38,13 +39,26 @@ export default function Dashboard() {
   const empty = () => Promise.resolve([])
   // نستدعي فقط الـendpoints التي تسمح بها صلاحية الدور في الـAPI
   const canOverview = role === 'super_admin' || role === 'admin'
-  const { data: overview } = useAsync(canOverview ? getOverview : () => Promise.resolve(null))
-  const { data: payments = [] } = useAsync(view.queues.includes('money') ? listPayments : empty)
-  const { data: redFlags = [] } = useAsync(view.queues.includes('clinical') ? listRedFlags : empty)
-  const { data: docRequests = [] } = useAsync(view.queues.includes('ops') ? listDocRequests : empty)
-  const { data: tickets = [] } = useAsync(view.queues.includes('tickets') ? listTickets : empty)
-  const { data: withdrawals = [] } = useAsync(role === 'finance_partner' ? listWithdrawals : empty)
-  const { data: feed = [] } = useAsync(view.feed ? activityFeed : empty)
+  const overviewState = useAsync(canOverview ? getOverview : () => Promise.resolve(null), [role])
+  const { data: overview } = overviewState
+  const needsPaymentList = (API_MOCK || !canOverview) && view.queues.includes('money')
+  const paymentState = useAsync(needsPaymentList ? listPayments : empty, [role, needsPaymentList])
+  const payments = paymentState.data ?? []
+  const redFlagAccess = role ? access(role, 'red-flags') : { level: 'denied' as const }
+  const canReadRedFlagCount = redFlagAccess.level !== 'denied'
+  const redFlagCountState = useAsync(
+    canReadRedFlagCount ? countOpenRedFlags : () => Promise.resolve(undefined),
+    [role, canReadRedFlagCount],
+    { interval: 15_000 },
+  )
+  const docRequestState = useAsync(view.queues.includes('ops') ? listDocRequests : empty, [role])
+  const docRequests = docRequestState.data ?? []
+  const ticketState = useAsync(view.queues.includes('tickets') ? listTickets : empty, [role])
+  const tickets = ticketState.data ?? []
+  const withdrawalState = useAsync(role === 'finance_partner' ? listWithdrawals : empty, [role])
+  const withdrawals = withdrawalState.data ?? []
+  const feedState = useAsync(view.feed ? activityFeed : empty, [role])
+  const feed = feedState.data ?? []
 
   const kpis = API_MOCK
     ? DEMO_KPIS
@@ -56,21 +70,77 @@ export default function Dashboard() {
       ]
 
   const QUEUES = [
-    { icon: 'receipt', label: 'حوالات جديدة', count: payments.filter((p) => p.status !== 'تمت الموافقة' && p.status !== 'مرفوض').length, sub: 'تحتاج مراجعة وموافقة', to: '/payments', badge: 'amber' as const, kind: 'money' },
-    { icon: 'flag', label: 'حالات الخطر', count: redFlags.filter((r) => r.level !== 'تم الحل').length, sub: 'حالات تحتاج إشرافاً فورياً', to: '/red-flags', badge: 'red' as const, kind: 'clinical' },
-    { icon: 'file', label: 'طلبات ملفات', count: docRequests.filter((d) => d.status === 'قيد المراجعة').length, sub: 'طلبات تغيير معالج إلخ', to: '/doc-requests', badge: 'blue' as const, kind: 'ops' },
-    { icon: 'ticket', label: 'تذاكر مفتوحة', count: tickets.filter((t) => t.status === 'مفتوحة').length, sub: 'تنبيهات وبلاغات فنية', to: '/tickets', badge: 'blue' as const, kind: 'tickets' },
+    {
+      icon: 'receipt', label: 'حوالات جديدة',
+      count: !API_MOCK && canOverview && overview ? overview.billing.pending_payments : payments.filter((p) => p.status !== 'تمت الموافقة' && p.status !== 'مرفوض').length,
+      loading: !API_MOCK && canOverview ? overviewState.loading : paymentState.loading,
+      error: !API_MOCK && canOverview ? overviewState.error : paymentState.error,
+      sub: 'تحتاج مراجعة وموافقة', to: '/payments', badge: 'amber' as const, kind: 'money',
+    },
+    {
+      icon: 'flag', label: 'حالات الخطر', count: redFlagCountState.data ?? 0,
+      loading: redFlagCountState.loading, error: redFlagCountState.error,
+      sub: 'حالات تحتاج إشرافاً فورياً', to: '/red-flags', badge: 'red' as const, kind: 'clinical',
+    },
+    {
+      icon: 'file', label: 'طلبات ملفات', count: docRequests.filter((d) => d.status === 'قيد المراجعة').length,
+      loading: docRequestState.loading, error: docRequestState.error,
+      sub: 'طلبات تغيير معالج إلخ', to: '/doc-requests', badge: 'blue' as const, kind: 'ops',
+    },
+    {
+      icon: 'ticket', label: 'تذاكر مفتوحة', count: tickets.filter((t) => t.status === 'مفتوحة').length,
+      loading: ticketState.loading, error: ticketState.error,
+      sub: 'تنبيهات وبلاغات فنية', to: '/tickets', badge: 'blue' as const, kind: 'tickets',
+    },
   ]
   const can = (s: Parameters<typeof access>[1]) => role && access(role, s).level !== 'denied'
   const actions = ACTIONS.filter((a) => can(a.to.slice(1) as never))
-  const pendingEarnings = withdrawals.filter((w) => w.status === 'pending').reduce((s, w) => s + w.amount, 0)
+  const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number } | null>(null)
+  useEffect(() => {
+    const updateCalendarMonth = () => {
+      const now = new Date()
+      const next = { year: now.getFullYear(), month: now.getMonth() }
+      setCalendarMonth((current) =>
+        current?.year === next.year && current.month === next.month ? current : next,
+      )
+    }
+    updateCalendarMonth()
+    const timer = window.setInterval(updateCalendarMonth, 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const pendingEarnings = withdrawals
+    .filter((withdrawal) => {
+      const date = new Date(withdrawal.date)
+      return withdrawal.status === 'pending'
+        && !Number.isNaN(date.getTime())
+        && calendarMonth !== null
+        && date.getFullYear() === calendarMonth.year
+        && date.getMonth() === calendarMonth.month
+    })
+    .reduce((sum, withdrawal) => sum + withdrawal.amount, 0)
 
   return (
     <>
-      <PageHeader title="لوحة التحكم" sub={overview ? fmtDate(overview.generated_at) : API_MOCK ? 'عرض تجريبي' : 'جارٍ التحميل…'} />
+      <PageHeader
+        title="لوحة التحكم"
+        sub={API_MOCK
+          ? 'عرض تجريبي'
+          : overview
+            ? fmtDate(overview.generated_at)
+            : overviewState.loading
+              ? 'جارٍ التحميل…'
+              : overviewState.error
+                ? 'تعذّر التحميل'
+                : '—'}
+      />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {view.kpis.map((i) => (
-          <StatCard key={kpis[i].label} {...kpis[i]} />
+          <StatCard
+            key={kpis[i].label}
+            {...kpis[i]}
+            loading={!API_MOCK && overviewState.loading}
+            error={!API_MOCK ? overviewState.error : null}
+          />
         ))}
       </div>
 
@@ -83,7 +153,7 @@ export default function Dashboard() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 text-[16px] font-semibold text-[#0a0a0a]">
                   {q.label}
-                  <Badge tone={q.badge}>{q.count}</Badge>
+                  <Badge tone={q.badge}><DataValue loading={q.loading} error={q.error} value={q.count} /></Badge>
                 </div>
                 <div className="text-[12px] text-[#657381]">{q.sub}</div>
               </div>
@@ -96,9 +166,14 @@ export default function Dashboard() {
         <>
           <h2 className="mt-6 font-['IBM_Plex_Sans_Arabic'] text-[18px] font-normal leading-6 tracking-[-0.54px] text-[#101828]">آخر الأنشطة</h2>
           <Card className="mt-3 divide-y divide-[#eff0f0] p-0">
-            {feed.length === 0 ? (
-              <div className="px-6 py-8 text-center text-[14px] text-[#657381]">لا توجد أنشطة بعد</div>
-            ) : feed.map((a, i) => (
+            <DataState
+              loading={feedState.loading}
+              error={feedState.error}
+              hasData={feedState.data !== undefined}
+              empty={feedState.data !== undefined && feed.length === 0}
+              onRetry={feedState.reload}
+            />
+            {feed.map((a, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-3.5">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: a.dot }} />
                 <span className="flex-1 text-[14px] text-[#0a0a0a]">{a.text}</span>
@@ -128,7 +203,7 @@ export default function Dashboard() {
             <div>
               <div className="text-[12px] text-[#657381]">أرباحك المعلقة هذا الشهر</div>
               <div className="mt-1 text-[24px] font-semibold text-[#135e66]">
-                {API_MOCK ? '8,940 SR' : `${pendingEarnings.toLocaleString('en-US')} SR`}
+                {API_MOCK ? '8,940 SR' : <DataValue loading={withdrawalState.loading} error={withdrawalState.error} value={`${pendingEarnings.toLocaleString('en-US')} SR`} />}
               </div>
             </div>
             <Btn>طلب تصفية</Btn>

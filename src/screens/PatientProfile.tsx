@@ -2,10 +2,10 @@ import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { listPatients, listRedFlags, listTherapists } from '../services/data'
+import { getPatient, listRedFlags, listTherapistNames } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { API_MOCK } from '../api/client'
-import { Badge, Btn, Card, PageHeader, ProgressBar } from '../components/ui'
+import { Badge, Btn, Card, DataState, PageHeader, ProgressBar } from '../components/ui'
 import Icon from '../components/Icon'
 
 const TABS = ['بيانات الحساب', 'المعالج والبرنامج', 'التقدم العلاجي', 'سجل المزاج', 'الجلسات', 'التحذيرات', 'المستندات']
@@ -27,16 +27,40 @@ const sessions = [
 export default function PatientProfile() {
   const { role } = useAuth()
   const [params] = useSearchParams()
-  const { data: patients = [] } = useAsync(listPatients)
-  const { data: redFlags = [] } = useAsync(listRedFlags)
-  const { data: therapists = [] } = useAsync(listTherapists)
-  const p = patients.find((x) => x.id === params.get('id')) ?? patients[0]
+  const patientId = params.get('id')
+  const { data: p, loading: patientLoading, error: patientError, reload: reloadPatient } = useAsync(
+    () => getPatient(patientId),
+    [patientId],
+  )
+  const redFlagAccess = role ? access(role, 'red-flags') : { level: 'denied' as const }
+  const canListRedFlags = redFlagAccess.level === 'full'
+  const { data: flagData, loading: flagsLoading, error: flagsError, reload: reloadFlags } = useAsync(
+    canListRedFlags ? listRedFlags : () => Promise.resolve([]),
+    [role, patientId, canListRedFlags],
+    { interval: 15_000 },
+  )
+  const redFlags = flagData ?? []
+  const canListTherapists = role === 'admin' || role === 'super_admin'
+  const { data: therapistData } = useAsync(
+    canListTherapists ? listTherapistNames : () => Promise.resolve([]),
+    [role, canListTherapists],
+  )
+  const therapists = therapistData ?? []
   const a = role ? access(role, 'patient-profile') : { level: 'denied' as const }
   const anon = a.mask === 'no-identity'
   const limited = a.mask === 'no-clinical'
   const full = a.level === 'full'
   const [tab, setTab] = useState(0)
-  if (!p) return <div className="py-16 text-center text-[14px] text-[#657381]">جارٍ التحميل…</div>
+  if (!p) return (
+    <DataState
+      loading={patientLoading}
+      error={patientError}
+      hasData={p !== undefined}
+      empty={p === null}
+      emptyMessage="لم يتم العثور على المريض"
+      onRetry={reloadPatient}
+    />
+  )
 
   const tabs = TABS.filter((t) => !(limited && CLINICAL_TABS.has(t)))
   const flags = redFlags.filter((r) => r.patientId === p.id)
@@ -55,6 +79,7 @@ export default function PatientProfile() {
           </span>
         }
       />
+      {patientError && <DataState loading={false} error={patientError} hasData onRetry={reloadPatient} />}
 
       {full && (
         <div className="mb-4 flex flex-wrap gap-2">
@@ -133,7 +158,7 @@ export default function PatientProfile() {
           )}
           {tabs[tab] === 'التحذيرات' && (
             <div className="space-y-2">
-              {flags.length === 0 && <p className="text-[14px] text-[#657381]">لا تحذيرات مسجلة.</p>}
+              {canListRedFlags && <DataState loading={flagsLoading} error={flagsError} hasData={flagData !== undefined} empty={flagData !== undefined && flags.length === 0} emptyMessage="لا تحذيرات مسجلة." onRetry={reloadFlags} />}
               {flags.map((f) => (
                 <div key={f.id} className="rounded-xl border border-red-100 bg-red-50/50 px-4 py-3">
                   <div className="flex items-center gap-2 font-bold text-[#0a0a0a]">
