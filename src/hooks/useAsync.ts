@@ -12,12 +12,16 @@ export function useAsync<T>(
   const [error, setError] = useState<Error | null>(null)
   const dataRef = useRef<T | undefined>(undefined)
   const requestId = useRef(0)
+  const inFlight = useRef(false)
   const runRef = useRef<(background?: boolean) => Promise<void>>(async () => {})
   const previousDeps = useRef<unknown[] | null>(null)
 
   runRef.current = async (background = false) => {
+    if (background && inFlight.current) return
+
     const id = ++requestId.current
     const hasData = dataRef.current !== undefined
+    inFlight.current = true
     if (!background || !hasData) setLoading(!hasData)
     if (hasData) setRefreshing(true)
 
@@ -33,6 +37,7 @@ export function useAsync<T>(
       }
     } finally {
       if (id === requestId.current) {
+        inFlight.current = false
         setLoading(false)
         setRefreshing(false)
       }
