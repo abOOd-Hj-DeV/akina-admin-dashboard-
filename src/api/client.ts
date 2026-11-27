@@ -127,7 +127,23 @@ async function toError(res: Response, json: unknown): Promise<ApiError> {
 
 export type Recovery = 'retry' | 'sign_in'
 type RefreshResult = 'refreshed' | 'invalid' | 'stale' | Recovery
-let refreshing: { generation: number; result: Promise<RefreshResult> } | undefined
+type Rotation = TokenPair | 'invalid' | Recovery
+let refreshing: { generation: number; result: Promise<RefreshResult>; rotation: Promise<Rotation> } | undefined
+
+async function rotateRefreshToken(refresh_token: string): Promise<Rotation> {
+  try {
+    const { res, json: body } = await send('POST', '/api/v1/auth/refresh',
+      { Accept: 'application/json', 'Content-Type': 'application/json' }, JSON.stringify({ refresh_token }))
+    const json = body as TokenPair | null
+    const error = body as { errors?: { refresh_token?: unknown } } | null
+    if ([401, 403].includes(res.status) || (res.status === 422 && error?.errors?.refresh_token)) return 'invalid'
+    if (res.status === 429 && res.headers.has('Retry-After')) return 'retry'
+    if (!res.ok || !json?.access_token || !json.refresh_token) return 'sign_in'
+    return json
+  } catch {
+    return 'sign_in'
+  }
+}
 
 /**
  * يستبدل زوج التوكنات عبر /auth/refresh. طلب واحد فقط في نفس الوقت: توكن التجديد
@@ -141,20 +157,14 @@ export function refreshSession(generation = sessionGeneration): Promise<RefreshR
   if (session()?.getItem(REFRESH_PENDING_KEY)) return Promise.resolve('sign_in')
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve('retry')
   session()?.setItem(REFRESH_PENDING_KEY, '1')
+  const rotation = rotateRefreshToken(refresh_token)
   const result = (async (): Promise<RefreshResult> => {
     try {
-      const { res, json: body } = await send('POST', '/api/v1/auth/refresh',
-        { Accept: 'application/json', 'Content-Type': 'application/json' }, JSON.stringify({ refresh_token }))
-      const json = body as TokenPair | null
+      const rotated = await rotation
       if (generation !== sessionGeneration) return 'stale'
-      const error = body as { errors?: { refresh_token?: unknown } } | null
-      if ([401, 403].includes(res.status) || (res.status === 422 && error?.errors?.refresh_token)) return 'invalid'
-      if (res.status === 429 && res.headers.has('Retry-After')) {
-        session()?.removeItem(REFRESH_PENDING_KEY)
-        return 'retry'
-      }
-      if (!res.ok || !json?.access_token || !json.refresh_token) return 'sign_in'
-      setTokens(json.access_token, json.refresh_token)
+      if (rotated === 'retry') session()?.removeItem(REFRESH_PENDING_KEY)
+      if (typeof rotated === 'string') return rotated
+      setTokens(rotated.access_token, rotated.refresh_token)
       return 'refreshed'
     } catch {
       return generation === sessionGeneration ? 'sign_in' : 'stale'
@@ -162,7 +172,7 @@ export function refreshSession(generation = sessionGeneration): Promise<RefreshR
       if (refreshing?.generation === generation) refreshing = undefined
     }
   })()
-  refreshing = { generation, result }
+  refreshing = { generation, result, rotation }
   return result
 }
 
@@ -217,10 +227,31 @@ async function request<T>(
 
 export async function revokeCurrentSession(): Promise<void> {
   const token = tokenStore.get()
+  const refresh = tokenStore.getRefresh()
+  const pending = refreshing?.generation === sessionGeneration ? refreshing.rotation : undefined
+  const uncertain = session()?.getItem(REFRESH_PENDING_KEY)
   tokenStore.clear()
-  if (!token) return
-  const { res, json } = await send('POST', '/api/v1/auth/logout', { Accept: 'application/json', Authorization: `Bearer ${token}` })
-  if (!res.ok) throw await toError(res, json)
+  const signedOutGeneration = sessionGeneration
+  const revoke = async (access: string) => {
+    const { res, json } = await send('POST', '/api/v1/auth/logout', { Accept: 'application/json', Authorization: `Bearer ${access}` })
+    if (!res.ok) throw await toError(res, json)
+  }
+  if (pending) {
+    const rotated = await pending
+    if (typeof rotated !== 'string') return revoke(rotated.access_token)
+  }
+  if (token) {
+    try {
+      return await revoke(token)
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 401 || !refresh || uncertain ||
+          signedOutGeneration !== sessionGeneration || navigator.onLine === false) throw error
+    }
+  }
+  if (!refresh || uncertain || signedOutGeneration !== sessionGeneration || navigator.onLine === false) return
+  const rotated = await rotateRefreshToken(refresh)
+  if (typeof rotated === 'string') throw new ApiError(0, 'تعذّر تأكيد إنهاء الجلسة.', undefined, 'revocation_unknown')
+  await revoke(rotated.access_token)
 }
 
 export const api = {

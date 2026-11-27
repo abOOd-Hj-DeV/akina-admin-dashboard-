@@ -186,7 +186,24 @@ describe('شاشات الحساب', () => {
     expect(tokenStore.get()).toBeNull()
     expect(tokenStore.getRefresh()).toBeNull()
   })
-  it.each([200, 500])('رد خروج قديم (%s) لا يمس الجلسة الجديدة', async (status) => {
+  it('revokes the session after an expired access token without restoring local credentials', async () => {
+    tokenStore.set('expired-access', 'current-refresh')
+    reply({}, 401)
+    reply({ access_token: 'rotated-access', refresh_token: 'rotated-refresh' })
+    reply({})
+    const pending = logoutApi()
+    expect(tokenStore.get()).toBeNull()
+    expect(tokenStore.getRefresh()).toBeNull()
+    await pending
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(call(1).url).toContain('/api/v1/auth/refresh')
+    expect(call(1).body).toEqual({ refresh_token: 'current-refresh' })
+    expect(call(2).url).toContain('/api/v1/auth/logout')
+    expect(call(2).init.headers).toMatchObject({ Authorization: 'Bearer rotated-access' })
+    expect(tokenStore.get()).toBeNull()
+    expect(tokenStore.getRefresh()).toBeNull()
+  })
+  it.each([200, 401, 500])('رد خروج قديم (%s) لا يمس الجلسة الجديدة', async (status) => {
     let finish!: (response: Response) => void
     fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { finish = resolve }))
     tokenStore.set('old-access', 'old-refresh')
@@ -199,5 +216,6 @@ describe('شاشات الحساب', () => {
     await pending
     expect(tokenStore.get()).toBe('acc')
     expect(tokenStore.getRefresh()).toBe('ref')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
