@@ -2,10 +2,10 @@
 import { api } from './client'
 import type { LaravelPaginator, Page } from './client'
 import type {
-  ApiAdminPatient, ApiAdminPatientDetail, ApiAdminTherapist, ApiAdminUser,
+  ApiAdminPatient, ApiAdminPatientDetail, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAdminUser,
   ApiAuditEntry, ApiDocument, ApiFaq, ApiOverview, ApiPayment,
   ApiProgram, ApiRedFlag, ApiRedFlagCounts, ApiRedFlagStats, ApiSupportTicket, ApiWithdrawal, CreateUserBody,
-  DocumentType, TherapistDecision, TherapistFilter, TherapistOptions,
+  DocumentType, TherapistFilter, TherapistOptions,
 } from './types'
 
 const qs = (params: Record<string, string | number | boolean | undefined>) => {
@@ -25,15 +25,15 @@ export const adminApi = {
     api.get<Page<ApiAdminPatient>>(`/api/v1/admin/patients${qs(f)}`),
   patient: (id: string) => api.get<{ data: ApiAdminPatientDetail }>(`/api/v1/admin/patients/${id}`),
 
-  therapists: (f: { status: TherapistFilter; page: number; per_page?: number }) =>
+  therapists: (f: { status: TherapistFilter; q?: string; page: number; per_page?: number }) =>
     api.get<Required<Page<ApiAdminTherapist>>>(`/api/v1/admin/therapists${qs(f)}`),
-  therapist: (id: string) => api.get<{ data: ApiAdminTherapist }>(`/api/v1/admin/therapists/${id}`),
+  therapist: (id: string) => api.get<{ data: ApiAdminTherapistDetail }>(`/api/v1/admin/therapists/${id}`),
   therapistLicense: (id: string) => api.getBlob(`/api/v1/admin/therapists/${id}/license`),
   therapistOptions: () => api.get<{ data: TherapistOptions }>('/api/v1/meta/therapist-options'),
-  approveTherapist: (id: string, body: { note?: string }) =>
-    api.post<{ data: TherapistDecision }>(`/api/v1/admin/therapists/${id}/approve`, body, false),
-  rejectTherapist: (id: string, body: { note: string }) =>
-    api.post<{ data: TherapistDecision }>(`/api/v1/admin/therapists/${id}/reject`, body, false),
+  approveTherapist: (id: string, body: { revision_id: string; note?: string }) =>
+    api.post(`/api/v1/admin/therapists/${id}/approve`, body, false),
+  rejectTherapist: (id: string, body: { revision_id: string; note: string }) =>
+    api.post(`/api/v1/admin/therapists/${id}/reject`, body, false),
   setClientsLimit: (id: string, clients_limit: number) =>
     api.put(`/api/v1/admin/therapists/${id}/clients-limit`, { clients_limit }),
 

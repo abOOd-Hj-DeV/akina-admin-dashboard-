@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ApiError } from '../api/client'
-import type { ApiAdminTherapist, DocumentType, TherapistOption } from '../api/types'
+import type { ApiAdminTherapist, DocumentType, TherapistRevisionSummary } from '../api/types'
 import { Btn, DataState } from '../components/ui'
 import { THERAPIST_OPTIONS } from '../data/therapistOptions'
 import { useAsync } from '../hooks/useAsync'
@@ -9,6 +9,7 @@ import {
   decideTherapist, DOCUMENT_TYPES, getTherapist, getTherapistLicense,
   getTherapistOptions, requestTherapistDocument, setTherapistActive,
 } from '../services/data'
+import { TherapistProfiles } from './TherapistProfiles'
 
 const control = 'w-full rounded-xl border border-[#ebebeb] px-3 py-2'
 const licenseTypes = new Set(['application/pdf', 'image/png', 'image/jpeg'])
@@ -20,9 +21,6 @@ const weekdays: Record<string, string> = {
 function actionError(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
     if (error.status === 403) return 'ليس لديك صلاحية لتنفيذ هذا الإجراء.'
-    if (error.code === 'already_decided') return 'تم البت في هذا الطلب بالفعل.'
-    if (error.code === 'not_submitted') return 'لم يرسل المعالج طلب الاعتماد بعد.'
-    if (error.code === 'license_missing') return 'رخصة المعالج مفقودة أو غير صالحة.'
     if (error.code === 'timeout') return 'انتهت مهلة الاتصال بالخادم. حاول مرة أخرى.'
     if (error.status === 0) return 'تعذّر الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.'
   }
@@ -50,14 +48,15 @@ function Modal({ title, busy, onClose, children, drawer = false }: {
   )
 }
 
-export type TherapistAction = { kind: 'approve' | 'reject' | 'active' | 'document'; therapist: ApiAdminTherapist }
+type RevisionAction = { kind: 'approve' | 'reject'; therapist: ApiAdminTherapist; revision: TherapistRevisionSummary }
+export type TherapistAction = RevisionAction | { kind: 'active' | 'document'; therapist: ApiAdminTherapist }
 
-export function TherapistActionDialog({ action, onClose, onDone }: {
-  action: TherapistAction; onClose: () => void; onDone: (message: string) => Promise<void>
+export function TherapistActionDialog({ action, onClose, onDone, onConflict }: {
+  action: TherapistAction; onClose: () => void; onDone: (message: string) => Promise<void>; onConflict: (message: string) => void
 }) {
   const { kind, therapist } = action
-  const title = kind === 'approve' ? 'قبول طلب الاعتماد'
-    : kind === 'reject' ? 'رفض طلب الاعتماد'
+  const isDecision = kind === 'approve' || kind === 'reject'
+  const title = isDecision ? `${kind === 'approve' ? 'قبول' : 'رفض'} ${action.revision.kind === 'update' ? 'تعديلات الملف المهني' : 'الملف المهني'}`
     : kind === 'active' ? (therapist.is_active ? 'تعليق الحساب' : 'تفعيل الحساب') : 'طلب مستند'
   const noteLabel = kind === 'reject' ? 'سبب الرفض (مطلوب)' : kind === 'document' ? 'سبب الطلب (اختياري)' : 'ملاحظة (اختياري)'
   const [docType, setDocType] = useState<DocumentType>('license')
@@ -83,8 +82,10 @@ export function TherapistActionDialog({ action, onClose, onDone }: {
       switch (kind) {
         case 'approve':
         case 'reject':
-          await decideTherapist(therapist.id, kind, trimmed)
-          success = kind === 'approve' ? 'تم اعتماد المعالج.' : 'تم رفض طلب الاعتماد.'
+          await decideTherapist(therapist.id, action.revision.id, kind, trimmed)
+          success = action.revision.kind === 'update'
+            ? kind === 'approve' ? 'تم اعتماد تعديلات الملف المهني ونشرها.' : 'تم رفض التعديلات وبقي الملف المنشور كما هو.'
+            : kind === 'approve' ? 'تم اعتماد الملف المهني.' : 'تم رفض الملف المهني.'
           break
         case 'active':
           await setTherapistActive(therapist.id, !therapist.is_active)
@@ -96,6 +97,22 @@ export function TherapistActionDialog({ action, onClose, onDone }: {
           break
       }
     } catch (cause) {
+      if (isDecision && cause instanceof ApiError) {
+        if (cause.status === 409 && cause.code === 'revision_superseded') {
+          onConflict('أرسل المعالج نسخة أحدث، أعد فتح الطلب')
+          return
+        }
+        if (cause.status === 409 && cause.code === 'already_decided') {
+          onConflict('تم البت في هذا الطلب بالفعل.')
+          return
+        }
+        if (cause.status === 422 && cause.errors?.email?.length) {
+          setError('البريد الإلكتروني في الملف المهني مستخدم في حساب آخر.')
+          inFlight.current = false
+          setBusy(false)
+          return
+        }
+      }
       const fallback = kind === 'document' && cause instanceof ApiError && cause.status === 409
         ? 'يوجد طلب مفتوح لهذا النوع من المستندات.'
         : kind === 'active' && cause instanceof ApiError && cause.status === 422
@@ -114,6 +131,7 @@ export function TherapistActionDialog({ action, onClose, onDone }: {
     <Modal title={title} busy={busy} onClose={onClose}>
       <form className="space-y-3" onSubmit={e => { e.preventDefault(); void submit() }}>
         <p className="text-sm">المعالج: {therapist.full_name}</p>
+        {isDecision && <p className="text-sm">تاريخ إرسال النسخة: {therapistDate(action.revision.submitted_at)}</p>}
         {kind === 'active' ? <p className="text-sm">هل تريد {title}؟</p> : (
           <>
             {kind === 'document' && (
@@ -141,9 +159,6 @@ export function TherapistActionDialog({ action, onClose, onDone }: {
   )
 }
 
-const optionLabel = (options: TherapistOption[], value: string | null) =>
-  options.find(option => option.code === value)?.name_ar ?? value ?? '—'
-
 function availability(value: unknown) {
   if (!value || typeof value !== 'object') return value == null ? '—' : String(value)
   const entries = Object.entries(value)
@@ -160,7 +175,9 @@ function availability(value: unknown) {
   )
 }
 
-export function TherapistDetails({ id, canViewLicense, onClose }: { id: string; canViewLicense: boolean; onClose: () => void }) {
+export function TherapistDetails({ id, canDecide, onDecide, onClose }: {
+  id: string; canDecide: boolean; onDecide: (action: RevisionAction) => void; onClose: () => void
+}) {
   const { data: row, loading, refreshing, error, reload } = useAsync(() => getTherapist(id), [id])
   const { data: options = THERAPIST_OPTIONS } = useAsync(getTherapistOptions, [], { interval: 0 })
   const [licenseBusy, setLicenseBusy] = useState(false)
@@ -169,7 +186,7 @@ export function TherapistDetails({ id, canViewLicense, onClose }: { id: string; 
   useEffect(() => () => { pendingTab.current?.close() }, [])
 
   const openLicense = async () => {
-    if (!canViewLicense || !row?.has_license || pendingTab.current) return
+    if (!canDecide || !row?.has_license || pendingTab.current) return
     setLicenseError('')
     const tab = window.open('about:blank', '_blank')
     if (!tab) { setLicenseError('اسمح بفتح النوافذ المنبثقة لعرض الرخصة.'); return }
@@ -194,21 +211,20 @@ export function TherapistDetails({ id, canViewLicense, onClose }: { id: string; 
   }
 
   const yesNo = (value: boolean) => value ? 'نعم' : 'لا'
+  const revision = row?.pending_revision?.status === 'pending' ? row.pending_revision : null
   const fields: [string, ReactNode][] = row ? [
-    ['معرّف المعالج', <bdi key="id">{row.id}</bdi>], ['الاسم الكامل', row.full_name],
-    ['حالة الطلب', THERAPIST_STATUS[row.approval_status ?? 'not_submitted']], ['توفّر الرخصة', yesNo(row.has_license)],
-    ['التخصص', optionLabel(options.specialties, row.specialty)], ['الدولة', optionLabel(options.countries, row.country)],
-    ['اللغات', row.languages?.map(language => optionLabel(options.languages, language)).join('، ') || '—'],
-    ['النبذة', row.bio || '—'], ['سنوات الخبرة', row.years_of_experience ?? '—'], ['التقييم', row.rating ?? '—'],
+    ['معرّف المعالج', <bdi key="id">{row.id}</bdi>], ['رقم طلب التقديم', <bdi key="application-ref">{row.application_ref ?? '—'}</bdi>],
+    ['حالة الطلب', THERAPIST_STATUS[row.approval_status ?? 'not_submitted']], ['توفّر رخصة قديمة', yesNo(row.has_license)],
+    ['التقييم', row.rating ?? '—'],
     ['قبول مرضى جدد', yesNo(row.can_accept_new_clients)], ['أوقات التوفّر', availability(row.availability)],
     ['عدد المرضى', row.clients_count], ['الحد الأقصى للمرضى', row.clients_limit ?? '—'],
     ['حالة الحساب', row.is_active ? 'نشط' : 'غير نشط'],
     ['رقم واتساب', <bdi key="whatsapp">{row.whatsapp_number ?? '—'}</bdi>], ['تاريخ الانضمام', therapistDate(row.created_at)],
-    ['سبب الرفض', row.approval_note ?? '—'], ['تاريخ إرسال الطلب', therapistDate(row.submitted_at)],
+    ['تاريخ إرسال الطلب', therapistDate(row.submitted_at)],
   ] : []
 
   return (
-    <Modal title="تفاصيل المعالج" busy={licenseBusy} onClose={onClose} drawer>
+    <Modal title={row ? `تفاصيل المعالج: ${row.full_name}` : 'تفاصيل المعالج'} busy={licenseBusy} onClose={onClose} drawer>
       <DataState loading={loading} error={error} hasData={!!row} onRetry={reload} />
       {refreshing && <p role="status" className="text-sm text-[#657381]">جارٍ تحديث التفاصيل…</p>}
       <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
@@ -219,10 +235,27 @@ export function TherapistDetails({ id, canViewLicense, onClose }: { id: string; 
           </div>
         ))}
       </dl>
+      {row && (
+        <>
+          {row.last_review ? (
+            <div className="mt-4 rounded-xl bg-gray-50 p-2 text-sm">
+              <p className="font-semibold">آخر مراجعة: {row.last_review.status === 'approved' ? 'معتمد' : 'مرفوض'} · {therapistDate(row.last_review.reviewed_at)}</p>
+              {row.last_review.note && <p className="break-words whitespace-pre-wrap">{row.last_review.status === 'rejected' ? 'سبب الرفض: ' : 'ملاحظة: '}{row.last_review.note}</p>}
+            </div>
+          ) : row.approval_note && <p className="mt-4 text-sm">سبب الرفض: {row.approval_note}</p>}
+          <TherapistProfiles published={row.published} isPublished={row.approval_status === 'approved'} revision={revision} options={options} />
+          {canDecide && revision && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Btn tone="green" disabled={!!error || licenseBusy} onClick={() => onDecide({ kind: 'approve', therapist: row, revision })}>قبول</Btn>
+              <Btn tone="danger-soft" disabled={!!error || licenseBusy} onClick={() => onDecide({ kind: 'reject', therapist: row, revision })}>رفض</Btn>
+            </div>
+          )}
+        </>
+      )}
       {licenseError && <p role="alert" className="mt-3 text-sm text-red-700">{licenseError}</p>}
       <div className="mt-4 flex gap-2">
-        {canViewLicense && row && (
-          <Btn disabled={!row.has_license || licenseBusy || !!error} onClick={() => void openLicense()}>
+        {canDecide && row?.has_license && (
+          <Btn disabled={licenseBusy || !!error} onClick={() => void openLicense()}>
             {licenseBusy ? 'جارٍ تحميل الرخصة…' : 'عرض الرخصة'}
           </Btn>
         )}

@@ -1,5 +1,5 @@
 import type { AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Ticket } from '../types'
-import type { ApiAdminTherapist } from '../api/types'
+import type { ApiAdminTherapistDetail, TherapistProfile } from '../api/types'
 import { ApiError } from '../api/client'
 
 export const patients: Patient[] = [
@@ -13,22 +13,56 @@ export const patients: Patient[] = [
   { id: 'P-1044', name: 'يوسف ن.', therapistId: 'T-089', status: 'نشط', subscription: 'باقة 8 أسابيع', progress: 88, compliance: 95, lastActivity: 'منذ ساعتين' },
 ]
 
-type MockTherapist = Pick<ApiAdminTherapist, 'id' | 'full_name' | 'approval_status' | 'created_at'> & Partial<ApiAdminTherapist>
+type MockTherapist = Pick<ApiAdminTherapistDetail, 'id' | 'full_name' | 'approval_status' | 'created_at'> & Partial<ApiAdminTherapistDetail>
 
-export const mockTherapist = (row: MockTherapist): ApiAdminTherapist => ({
-  has_license: row.approval_status !== null, specialty: 'anxiety', country: 'SY', languages: ['ar', 'en'],
-  bio: null, years_of_experience: 5, rating: null, can_accept_new_clients: true,
-  availability: { monday: ['09:00-12:00'] }, clients_count: 0, clients_limit: 20, is_active: true,
-  whatsapp_number: null, approval_note: null, submitted_at: row.approval_status === null ? null : row.created_at,
-  ...row,
+export function mockTherapist(row: MockTherapist): ApiAdminTherapistDetail {
+  const approved = row.approval_status === 'approved'
+  const published = {
+    full_name: row.full_name, job_title: approved ? 'معالج نفسي معتمد' : null,
+    specialty: approved ? 'anxiety' : null, bio: approved ? 'أقدّم الدعم النفسي للبالغين وأساعدهم على إدارة القلق.' : null,
+    email: null, city: approved ? 'دمشق' : null, country: approved ? 'SY' : null,
+    languages: approved ? ['ar', 'en'] : [], years_of_experience: approved ? 5 : null,
+    ...row.published,
+  }
+  return {
+    ...published,
+    has_license: approved, rating: null, can_accept_new_clients: true,
+    availability: { monday: ['09:00-12:00'] }, clients_count: 0, clients_limit: 20, is_active: true,
+    whatsapp_number: null, application_ref: null, approval_note: null, submitted_at: null,
+    pending_revision: null, last_review: null,
+    ...row,
+    published,
+  }
+}
+
+const initialProfile: TherapistProfile = {
+  full_name: 'د. نور حسن', job_title: 'معالج نفسي معتمد', specialty: 'anxiety', country: 'SY',
+  city: 'حلب', email: 'therapist-initial@example.test', languages: ['ar'], years_of_experience: 0,
+  bio: 'أعمل على دعم البالغين وتطوير مهارات التعامل مع القلق.',
+}
+const updateDemo = mockTherapist({
+  id: 'T-042', full_name: 'د. سارة أحمد', approval_status: 'approved', clients_count: 18, rating: 4.9,
+  application_ref: 'APP-1001', created_at: '2024-03-15T09:00:00Z',
 })
+updateDemo.pending_revision = {
+  id: '8cf7762e-2108-46ef-88ac-36416159391e', kind: 'update', status: 'pending', submitted_at: '2025-11-21T09:00:00Z',
+  data: { ...updateDemo.published, city: 'حلب', years_of_experience: 6 },
+  changes: { city: { old: 'دمشق', new: 'حلب' }, years_of_experience: { old: 5, new: 6 } },
+}
 
 export const therapists = [
-  mockTherapist({ id: 'T-042', full_name: 'د. سارة أحمد', approval_status: 'approved', clients_count: 18, rating: 4.9, created_at: '2024-03-15T09:00:00Z' }),
+  updateDemo,
   mockTherapist({ id: 'T-089', full_name: 'د. محمد الخالدي', approval_status: 'approved', clients_count: 15, rating: 4.8, created_at: '2024-06-20T09:00:00Z' }),
-  mockTherapist({ id: 'T-124', full_name: 'د. نور حسن', approval_status: 'pending', created_at: '2025-11-16T09:00:00Z' }),
+  mockTherapist({
+    id: 'T-124', full_name: 'د. نور حسن', approval_status: 'pending', created_at: '2025-11-16T09:00:00Z',
+    application_ref: 'APP-1002', whatsapp_number: '+963983321260', submitted_at: '2025-11-22T09:00:00Z',
+    pending_revision: {
+      id: '9e1a8253-057a-4bdb-9c31-3c2eb1f64a0b', kind: 'initial', status: 'pending',
+      submitted_at: '2025-11-22T09:00:00Z', data: initialProfile,
+    },
+  }),
   mockTherapist({ id: 'T-097', full_name: 'د. ليلى منصور', approval_status: 'approved', clients_count: 12, rating: 4.7, is_active: false, created_at: '2024-09-02T09:00:00Z' }),
-  mockTherapist({ id: 'T-133', full_name: 'د. هشام فؤاد', approval_status: 'rejected', approval_note: 'المستند غير واضح', created_at: '2024-12-11T09:00:00Z' }),
+  mockTherapist({ id: 'T-133', full_name: 'د. هشام فؤاد', approval_status: 'rejected', approval_note: 'تفاصيل الملف لا تطابق طلب التقديم.', created_at: '2024-12-11T09:00:00Z' }),
   mockTherapist({ id: 'T-134', full_name: 'د. ريم محمود', approval_status: null, created_at: '2025-11-19T09:00:00Z' }),
 ]
 
