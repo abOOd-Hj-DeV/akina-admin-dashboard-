@@ -155,4 +155,18 @@ describe('شاشات الحساب', () => {
     expect(tokenStore.get()).toBeNull()
     expect(tokenStore.getRefresh()).toBeNull()
   })
+  it.each([200, 500])('رد خروج قديم (%s) لا يمس الجلسة الجديدة', async (status) => {
+    let finish!: (response: Response) => void
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { finish = resolve }))
+    tokenStore.set('old-access', 'old-refresh')
+    const pending = logoutApi().catch(() => undefined)
+    expect(tokenStore.get()).toBeNull()
+    expect((call().init.headers as Record<string, string>).Authorization).toBe('Bearer old-access')
+    reply(tokens)
+    await loginApi('+963990000000', 'secret123')
+    finish(json({ message: 'done' }, status))
+    await pending
+    expect(tokenStore.get()).toBe('acc')
+    expect(tokenStore.getRefresh()).toBe('ref')
+  })
 })

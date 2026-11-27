@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode, useRef } from 'react'
 import type { Role } from '../types'
 import { loginApi, logoutAllApi, logoutApi, resendLogin2faApi, restoreSessionApi, verifyLogin2faApi } from '../api/auth'
-import { API_MOCK, tokenStore } from '../api/client'
+import { API_MOCK, assertSession, tokenStore } from '../api/client'
 import type { ApiRole, ApiUser, AuthResponse } from '../api/types'
 
 const ADMIN_ROLES = new Set<ApiRole>([
@@ -44,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string | null>(() => (API_MOCK ? sessionStorage.getItem('sakina-user-name') : null))
   const [userId, setUserId] = useState<string | null>(null)
   const [ready, setReady] = useState<boolean>(() => API_MOCK || !tokenStore.getRefresh())
+  const challengeRef = useRef<string | null>(null)
 
   const applyUser = (user: ApiUser): Role => {
     if (!ADMIN_ROLES.has(user.role)) {
@@ -59,14 +60,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return r
   }
 
-  const reset = () => { clearSessionKeys(); setRole(null); setUserId(null); setUserName(null) }
+  const reset = () => {
+    challengeRef.current = null
+    clearSessionKeys()
+    setRole(null)
+    setUserId(null)
+    setUserName(null)
+    setReady(true)
+  }
 
   useEffect(() => {
     if (API_MOCK) return
     if (!tokenStore.getRefresh()) { clearSessionKeys(); return }
+    const generation = tokenStore.generation()
     let live = true
     void restoreSessionApi().then((user) => {
-      if (!live) return
+      if (!live || generation !== tokenStore.generation()) return
       try {
         if (user) applyUser(user)
         else reset()
@@ -94,22 +103,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const finishLogin = (res: AuthResponse): Role => applyUser(res.user)
 
-  const challengeRef = useRef<string | null>(null)
-
   const apiLogin = async (whatsapp: string, password: string): Promise<Role | '2fa'> => {
+    tokenStore.clear()
+    reset()
+    const generation = tokenStore.generation()
     const res = await loginApi(whatsapp, password)
     if ('requires_2fa' in res) {
+      assertSession(generation)
       // الباك اند يربط الـOTP بهذا التحدي؛ نحتفظ به في الذاكرة فقط (لا تخزين)
       challengeRef.current = res.login_challenge
       return '2fa'
     }
+    assertSession(generation + 1)
     return finishLogin(res)
   }
 
   const apiVerify2fa = async (whatsapp: string, otp: string): Promise<Role> => {
     const challenge = challengeRef.current
     if (!challenge) throw new Error('انتهى طلب الدخول، أعد إدخال رقمك وكلمة المرور.')
+    const generation = tokenStore.generation()
     const auth = await verifyLogin2faApi(whatsapp, otp, challenge)
+    assertSession(generation + 1)
     challengeRef.current = null
     return finishLogin(auth)
   }
@@ -121,12 +135,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    void logoutApi().catch(() => tokenStore.clear())
+    void logoutApi().catch(() => undefined)
     reset()
   }
 
   const logoutAll = async () => {
+    const generation = tokenStore.generation()
     await logoutAllApi()
+    assertSession(generation + 1)
     reset()
   }
 

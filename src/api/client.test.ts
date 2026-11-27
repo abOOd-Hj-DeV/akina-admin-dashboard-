@@ -84,6 +84,24 @@ describe('تخزين التوكنات والتجديد والمهلة', () => {
     await expect(c.api.post('/api/v1/auth/login', {}, false)).rejects.toMatchObject({ status: 401 })
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+  it.each([200, 401])('رد تجديد قديم (%s) لا يغيّر جلسة جديدة ولا يعيد طلبها', async (status) => {
+    let finish!: (response: Response) => void
+    let started!: () => void
+    const refreshing = new Promise<void>((resolve) => { started = resolve })
+    c.tokenStore.set('old-access', 'old-refresh')
+    fetchMock.mockResolvedValueOnce(json({}, 401))
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { finish = resolve; started() }))
+    const request = c.api.get('/api/v1/admin/users')
+    const rejected = expect(request).rejects.toMatchObject({ code: 'session_changed' })
+    await refreshing
+    c.tokenStore.set('new-access', 'new-refresh')
+    finish(json({ access_token: 'stale-access', refresh_token: 'stale-refresh' }, status))
+    await rejected
+    expect(c.tokenStore.get()).toBe('new-access')
+    expect(c.tokenStore.getRefresh()).toBe('new-refresh')
+    expect(env.events).not.toContain('sakina:unauthenticated')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
   it('طلبات متزامنة بـ401 تستخدم تجديداً واحداً (توكن التجديد يُستعمل مرة واحدة)', async () => {
     c.tokenStore.set('acc', 'ref')
     fetchMock.mockImplementation(async (url: string, init: RequestInit) => {

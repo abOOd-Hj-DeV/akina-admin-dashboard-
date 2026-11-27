@@ -16,15 +16,24 @@ const session = (): Storage | null => (typeof sessionStorage === 'undefined' ? n
 
 // توكن الوصول في الذاكرة فقط؛ توكن التجديد في sessionStorage (يُمسح بإغلاق التبويب)
 let accessToken: string | null = null
+let sessionGeneration = 0
+
+function setTokens(token: string, refresh?: string): void {
+  accessToken = token
+  if (refresh) session()?.setItem(REFRESH_KEY, refresh)
+  else session()?.removeItem(REFRESH_KEY)
+}
 
 export const tokenStore = {
+  generation: () => sessionGeneration,
   get: () => accessToken,
   getRefresh: () => session()?.getItem(REFRESH_KEY) ?? null,
   set: (t: string, refresh?: string) => {
-    accessToken = t
-    if (refresh) session()?.setItem(REFRESH_KEY, refresh)
+    sessionGeneration++
+    setTokens(t, refresh)
   },
   clear: () => {
+    sessionGeneration++
     accessToken = null
     session()?.removeItem(REFRESH_KEY)
   },
@@ -49,6 +58,18 @@ export class ApiError extends Error {
     this.code = code
     this.meta = meta
   }
+}
+
+export function assertSession(generation: number): void {
+  if (generation !== sessionGeneration) {
+    throw new ApiError(0, 'تغيّرت جلسة تسجيل الدخول.', undefined, 'session_changed')
+  }
+}
+
+export function expireSession(generation: number): void {
+  if (generation !== sessionGeneration) return
+  tokenStore.clear()
+  window.dispatchEvent(new Event('sakina:unauthenticated'))
 }
 
 export interface Page<T> {
@@ -93,31 +114,34 @@ async function toError(res: Response, json: unknown): Promise<ApiError> {
   return new ApiError(res.status, j.message ?? `HTTP ${res.status}`, j.errors, j.code, j.meta)
 }
 
-let refreshing: Promise<boolean> | null = null
+let refreshing: { generation: number; result: Promise<boolean> } | undefined
 
 /**
  * يستبدل زوج التوكنات عبر /auth/refresh. طلب واحد فقط في نفس الوقت: توكن التجديد
  * يُستعمل مرة واحدة، وإعادة استخدامه تُعتبر تسريباً فيُلغي الباك اند كل الجلسات.
  */
-export function refreshSession(): Promise<boolean> {
-  if (refreshing) return refreshing
+export function refreshSession(generation = sessionGeneration): Promise<boolean> {
+  if (generation !== sessionGeneration) return Promise.resolve(false)
+  if (refreshing?.generation === generation) return refreshing.result
   const refresh_token = tokenStore.getRefresh()
   if (!refresh_token) return Promise.resolve(false)
-  refreshing = (async () => {
+  const result = (async () => {
     try {
       const { res, json: body } = await send('POST', '/api/v1/auth/refresh',
         { Accept: 'application/json', 'Content-Type': 'application/json' }, JSON.stringify({ refresh_token }))
       const json = body as TokenPair | null
-      if (!res.ok || !json?.access_token) { tokenStore.clear(); return false }
-      tokenStore.set(json.access_token, json.refresh_token)
+      if (generation !== sessionGeneration) return false
+      if (!res.ok || !json?.access_token) { expireSession(generation); return false }
+      setTokens(json.access_token, json.refresh_token)
       return true
     } catch {
       return false
     } finally {
-      refreshing = null
+      if (refreshing?.generation === generation) refreshing = undefined
     }
   })()
-  return refreshing
+  refreshing = { generation, result }
+  return result
 }
 
 const NO_RETRY = /^\/api\/v1\/auth\/(login|refresh|forgot-password|reset-password|activate|otp)/
@@ -128,7 +152,9 @@ async function request<T>(
   body?: unknown,
   opts: { idempotency?: boolean; form?: FormData; binary?: boolean } = {},
   retried = false,
+  generation = sessionGeneration,
 ): Promise<T> {
+  assertSession(generation)
   const headers: Record<string, string> = { Accept: 'application/json' }
   const token = tokenStore.get()
   if (token) headers.Authorization = `Bearer ${token}`
@@ -139,18 +165,32 @@ async function request<T>(
     headers['Content-Type'] = 'application/json'
     payload = JSON.stringify(body)
   }
-  const { res, json } = await send(method, path, headers, payload, opts.binary)
+  const { res, json } = await send(method, path, headers, payload, opts.binary).catch((error) => {
+    assertSession(generation)
+    throw error
+  })
+  assertSession(generation)
   if (!res.ok) {
     if (res.status === 401 && !NO_RETRY.test(path)) {
-      if (!retried && tokenStore.getRefresh() && (await refreshSession())) {
-        return request<T>(method, path, body, opts, true)
+      if (!retried && tokenStore.getRefresh()) {
+        if (token !== tokenStore.get() || await refreshSession(generation)) {
+          return request<T>(method, path, body, opts, true, generation)
+        }
+        if (generation !== sessionGeneration && tokenStore.get()) assertSession(generation)
       }
-      tokenStore.clear()
-      window.dispatchEvent(new Event('sakina:unauthenticated'))
+      expireSession(generation)
     }
     throw await toError(res, json)
   }
   return json as T
+}
+
+export async function revokeCurrentSession(): Promise<void> {
+  const token = tokenStore.get()
+  tokenStore.clear()
+  if (!token) return
+  const { res, json } = await send('POST', '/api/v1/auth/logout', { Accept: 'application/json', Authorization: `Bearer ${token}` })
+  if (!res.ok) throw await toError(res, json)
 }
 
 export const api = {
