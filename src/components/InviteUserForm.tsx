@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CountryCode } from 'libphonenumber-js/min'
-import { ApiError } from '../api/client'
+import { ApiError, MutationOutcomeUnknown } from '../api/client'
 import { describeAuthError } from '../api/errors'
 import type { ApiRole } from '../api/types'
 import { ROLE_LABELS } from '../auth/permissions'
@@ -29,19 +29,29 @@ export default function InviteUserForm({ roles, disabled = false, onDone, onCanc
   const [role, setRole] = useState<ApiRole>(roles[0])
   const [applicationRef, setApplicationRef] = useState('')
   const [busy, setBusy] = useState(false)
+  const [unconfirmed, setUnconfirmed] = useState<{ payload: string; retry: () => Promise<unknown> } | null>(null)
   const { errors, clear, reset, replace } = useFieldErrors<Field>()
   const isTherapist = role === 'therapist'
+  const { body, errors: local } = buildInvite({ name, email, whatsapp: wa, country, role, applicationRef })
+  const payload = JSON.stringify(body)
+  const retry = unconfirmed?.payload === payload ? unconfirmed?.retry : undefined
 
   const submit = async () => {
     if (busy || disabled) return
     reset()
-    const { body, errors: local } = buildInvite({ name, email, whatsapp: wa, country, role, applicationRef })
     if (!body) { replace(local); return }
     setBusy(true)
     try {
-      await inviteUser(body)
+      if (retry) await retry()
+      else await inviteUser(body)
+      setUnconfirmed(null)
       onDone()
     } catch (e) {
+      if (e instanceof MutationOutcomeUnknown && payload !== undefined) {
+        setUnconfirmed({ payload, retry: e.retry })
+      } else {
+        setUnconfirmed(null)
+      }
       if (e instanceof ApiError && e.status === 503 && e.code === 'whatsapp_check_unavailable') {
         replace({ form: 'خدمة التحقق من رقم واتساب غير متاحة مؤقتًا. حاول إرسال الدعوة مرة أخرى بعد قليل.' })
         return
@@ -96,7 +106,7 @@ export default function InviteUserForm({ roles, disabled = false, onDone, onCanc
         </div>
         {errors.form && <p role="alert" className="rounded-xl bg-red-50 px-4 py-2 text-[12px] font-medium text-[#fd4438]">{errors.form}</p>}
         <div className="flex gap-2">
-          <Btn tone="green" type="submit" disabled={busy || disabled}>{busy ? 'جارٍ الإرسال…' : 'إرسال الدعوة'}</Btn>
+          <Btn tone="green" type="submit" disabled={busy || disabled}>{busy ? 'جارٍ الإرسال…' : retry ? 'إعادة محاولة الطلب نفسه' : 'إرسال الدعوة'}</Btn>
           <Btn tone="ghost" type="button" onClick={onCancel}>إلغاء</Btn>
         </div>
       </form>

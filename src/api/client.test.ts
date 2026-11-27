@@ -112,6 +112,46 @@ describe('تخزين التوكنات والتجديد والمهلة', () => {
     await Promise.all([c.api.get('/api/v1/a'), c.api.get('/api/v1/b')])
     expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/refresh'))).toHaveLength(1)
   })
+  it('keeps one key per authenticated mutation, only for supported routes', async () => {
+    c.tokenStore.set('access', 'refresh')
+    fetchMock
+      .mockResolvedValueOnce(json({}, 401))
+      .mockResolvedValueOnce(json({ access_token: 'new-access', refresh_token: 'new-refresh' }))
+      .mockResolvedValueOnce(json({}))
+      .mockResolvedValueOnce(json({}))
+      .mockResolvedValueOnce(json({}))
+    await c.api.post('/api/v1/admin/users', { name: 'Synthetic A' }, true)
+    await c.api.post('/api/v1/admin/users', { name: 'Synthetic B' }, true)
+    await c.api.post('/api/v1/admin/users/sample/invitation/resend')
+    const keys = fetchMock.mock.calls.map(([, init]) => init.headers['Idempotency-Key'])
+    expect(keys[0]).toBeTruthy()
+    expect(keys[0] === keys[2]).toBe(true)
+    expect(keys[0] === keys[3]).toBe(false)
+    expect(keys[4]).toBeUndefined()
+  })
+  it.each([0, 503])('does not automatically repeat a mutation with an unknown outcome (%s)', async (status) => {
+    c.tokenStore.set('access', 'refresh')
+    if (status) fetchMock.mockResolvedValueOnce(json({}, status))
+    else fetchMock.mockRejectedValueOnce(new TypeError('disconnected'))
+    await expect(c.api.post('/api/v1/admin/users', {}, true)).rejects.toMatchObject({ code: 'mutation_outcome_unknown' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+  it('allows explicit replay with the same snapshot only in the originating session', async () => {
+    c.tokenStore.set('access', 'refresh')
+    fetchMock.mockResolvedValueOnce(json({}, 503)).mockResolvedValueOnce(json({}))
+    const payload = { name: 'Synthetic original' }
+    const outcome = await c.api.post('/api/v1/admin/users', payload, true).catch((error: unknown) => error)
+    if (!(outcome instanceof c.MutationOutcomeUnknown)) throw new Error('expected an uncertain mutation')
+    payload.name = 'Edited before retry'
+    await outcome.retry()
+    const [, first] = fetchMock.mock.calls[0]
+    const [, second] = fetchMock.mock.calls[1]
+    expect(first.headers['Idempotency-Key'] === second.headers['Idempotency-Key']).toBe(true)
+    expect(first.body === second.body).toBe(true)
+    c.tokenStore.set('new-access', 'new-refresh')
+    await expect(outcome.retry()).rejects.toMatchObject({ code: 'session_changed' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
   it('مهلة الطلب 60 ثانية على الأقل وتنتهي بخطأ timeout', async () => {
     expect(c.REQUEST_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000)
     vi.useFakeTimers()

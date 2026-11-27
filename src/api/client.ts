@@ -63,6 +63,12 @@ export class ApiError extends Error {
   }
 }
 
+export class MutationOutcomeUnknown extends ApiError {
+  constructor(status: number, readonly retry: () => Promise<unknown>) {
+    super(status, 'لم يتأكد تنفيذ العملية. تحقق من الحالة قبل إرسال طلب جديد.', undefined, 'mutation_outcome_unknown')
+  }
+}
+
 export function assertSession(generation: number): void {
   if (generation !== sessionGeneration) {
     throw new ApiError(0, 'تغيّرت جلسة تسجيل الدخول.', undefined, 'session_changed')
@@ -163,8 +169,8 @@ const NO_RETRY = /^\/api\/v1\/auth\/(login|refresh|forgot-password|reset-passwor
 async function request<T>(
   method: string,
   path: string,
-  body?: unknown,
-  opts: { idempotency?: boolean; form?: FormData; binary?: boolean } = {},
+  payload?: string,
+  opts: { key?: string; binary?: boolean } = {},
   retried = false,
   generation = sessionGeneration,
 ): Promise<T> {
@@ -172,15 +178,14 @@ async function request<T>(
   const headers: Record<string, string> = { Accept: 'application/json' }
   const token = tokenStore.get()
   if (token) headers.Authorization = `Bearer ${token}`
-  if (opts.idempotency) headers['Idempotency-Key'] = crypto.randomUUID()
-  let payload: BodyInit | undefined
-  if (opts.form) payload = opts.form
-  else if (body !== undefined) {
-    headers['Content-Type'] = 'application/json'
-    payload = JSON.stringify(body)
-  }
+  if (opts.key) headers['Idempotency-Key'] = opts.key
+  if (payload !== undefined) headers['Content-Type'] = 'application/json'
+  const retry = () => request<T>(method, path, payload, opts, false, generation)
   const { res, json } = await send(method, path, headers, payload, opts.binary).catch((error) => {
     assertSession(generation)
+    if (opts.key && error instanceof ApiError && error.status === 0) {
+      throw new MutationOutcomeUnknown(error.status, retry)
+    }
     throw error
   })
   assertSession(generation)
@@ -190,7 +195,7 @@ async function request<T>(
         const result = token !== tokenStore.get() ? 'refreshed' : await refreshSession(generation)
         assertSession(generation)
         if (result === 'refreshed') {
-          return request<T>(method, path, body, opts, true, generation)
+          return request<T>(method, path, payload, opts, true, generation)
         }
         if (result === 'retry' || result === 'sign_in') {
           window.dispatchEvent(new CustomEvent<Recovery>('sakina:session-unverified', { detail: result }))
@@ -199,7 +204,11 @@ async function request<T>(
       }
       expireSession(generation)
     }
-    throw await toError(res, json)
+    const error = await toError(res, json)
+    if (opts.key && res.status >= 500 && error.code !== 'whatsapp_check_unavailable') {
+      throw new MutationOutcomeUnknown(error.status, retry)
+    }
+    throw error
   }
   return json as T
 }
@@ -215,9 +224,9 @@ export async function revokeCurrentSession(): Promise<void> {
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   getBlob: (path: string) => request<Blob>('GET', path, undefined, { binary: true }),
-  post: <T>(path: string, body?: unknown, idempotent = true) =>
-    request<T>('POST', path, body, { idempotency: idempotent }),
-  put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
-  patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
+  post: <T>(path: string, body?: unknown, idempotent = false) =>
+    request<T>('POST', path, JSON.stringify(body), { key: idempotent ? crypto.randomUUID() : undefined }),
+  put: <T>(path: string, body?: unknown) => request<T>('PUT', path, JSON.stringify(body)),
+  patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, JSON.stringify(body)),
   del: <T>(path: string) => request<T>('DELETE', path),
 }
