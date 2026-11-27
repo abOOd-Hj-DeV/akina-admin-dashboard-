@@ -1,3 +1,11 @@
+export function redFlagPriority(priority: string) {
+  switch (priority) {
+    case 'high': return { label: 'عالية', tone: 'red' } as const
+    case 'medium': return { label: 'متوسطة', tone: 'amber' } as const
+    case 'low': return { label: 'منخفضة', tone: 'blue' } as const
+    default: return { label: 'غير معروفة', tone: 'gray' } as const
+  }
+}
 const typeLabels: Record<string, string> = {
   low_mood: 'درجة اكتئاب أو قلق مرتفعة',
   non_compliance: 'عدم التزام بالخطة العلاجية',

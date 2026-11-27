@@ -50,7 +50,6 @@ const mapPayment = (p: ApiPayment): Payment => ({
   status: PAYMENT_STATUS[p.status] ?? 'قيد المراجعة',
 })
 
-const FLAG_LEVEL = { high: 'حرج', medium: 'عالي', low: 'متوسط' } as const
 export const mapFlag = (f: ApiRedFlag): RedFlag => ({
   id: f.id,
   patientId: f.patient_id,
@@ -64,7 +63,6 @@ export const mapFlag = (f: ApiRedFlag): RedFlag => ({
   assigneeName: f.assignee_name ?? null,
   therapistName: f.therapist_name ?? null,
   reason: f.description,
-  level: f.status === 'resolved' ? 'تم الحل' : (FLAG_LEVEL[f.priority] ?? 'متوسط'),
   assessmentScore: f.assessment_score ?? null,
   onHold: f.on_hold,
   allowedDecisions: f.allowed_decisions ?? [],
@@ -257,7 +255,7 @@ export const listRedFlags = () =>
   API_MOCK ? wait(mock.redFlags) : fetchPages(page => adminApi.redFlags({ page })).then(rows => rows.map(mapFlag))
 
 export const countOpenRedFlags = () =>
-  API_MOCK ? wait(mock.redFlags.filter(f => f.level !== 'تم الحل').length)
+  API_MOCK ? wait(mock.redFlags.filter(f => f.status !== 'resolved').length)
     : adminApi.redFlagCounts().then(r => Object.values(r.data.open).reduce((sum, count) => sum + count, 0))
 
 export const listDocRequests = () =>

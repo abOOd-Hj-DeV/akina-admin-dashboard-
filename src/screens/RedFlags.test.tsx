@@ -20,7 +20,6 @@ const heldFlag: RedFlag = {
   assigneeName: 'د. سارة',
   therapistName: 'د. ليلى',
   reason: 'أشار المريض إلى أفكار لإيذاء النفس.',
-  level: 'حرج',
   assessmentScore: 27,
   onHold: true,
   allowedDecisions: ['reactivate', 'keep_hold'],
@@ -79,7 +78,6 @@ describe('واجهة حالات الخطر', () => {
     const resolvedFlag = {
       ...heldFlag,
       status: 'resolved' as const,
-      level: 'تم الحل' as const,
       onHold: false,
       allowedDecisions: [],
       actionTaken: 'تمت إعادة تفعيل الحساب بعد المراجعة.',

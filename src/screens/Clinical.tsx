@@ -6,7 +6,7 @@ import { API_MOCK } from '../api/client'
 import { Badge, Banner, Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 import { formatAdminDate } from '../lib/format-date'
-import { redFlagLabel } from '../lib/red-flag-label'
+import { redFlagLabel, redFlagPriority } from '../lib/red-flag-label'
 
 /** الإشراف الإكلينيكي: المشرف كامل، المدير الرئيسي قراءة فقط */
 export default function Clinical() {
@@ -21,7 +21,7 @@ export default function Clinical() {
   )
   const redFlags = data ?? []
   const full = a.level === 'full'
-  const critical = redFlags.filter((r) => r.level === 'حرج' || r.level === 'عالي')
+  const highCount = redFlags.filter(flag => flag.status !== 'resolved' && flag.priority === 'high').length
 
   return (
     <>
@@ -29,30 +29,32 @@ export default function Clinical() {
         title="الإشراف الإكلينيكي"
         sub={!full ? 'عرض للقراءة فقط' : 'مراجعة الحالات المحالة والخطط العلاجية — بيانات بدون هوية حسب السياسة'}
       />
-      {critical.length > 0 && <Banner tone="red"><Icon name="warn" size={14} className="ms-1 inline" /> هناك {critical.length} حالة حرجة تحتاج تدخلاً فورياً</Banner>}
+      {!error && highCount > 0 && <Banner tone="red"><Icon name="warn" size={14} className="ms-1 inline" /> هناك {highCount} حالة مفتوحة ذات أولوية عالية</Banner>}
 
       <div className="space-y-4">
         <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && redFlags.length === 0} onRetry={reload} />
-        {redFlags.map((f) => (
-          <Card key={f.id} className="flex items-start gap-4">
-            <span className="mt-1 text-red-500"><Icon name="flag" size={20} /></span>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h3 className="text-[16px] font-bold text-[#0a0a0a]">
-                  بلاغ سريري — {role === 'super_admin' ? f.patientName : 'مريض'}
-                </h3>
-                <Badge tone={f.level === 'حرج' ? 'red' : f.level === 'عالي' ? 'amber' : f.level === 'تم الحل' ? 'green' : 'blue'}>
-                  {f.level}
-                </Badge>
+        {redFlags.map((f) => {
+          const priority = redFlagPriority(f.priority)
+          return (
+            <Card key={f.id} className="flex items-start gap-4">
+              <span className="mt-1 text-red-500"><Icon name="flag" size={20} /></span>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[16px] font-bold text-[#0a0a0a]">
+                    بلاغ سريري — {role === 'super_admin' ? f.patientName : 'مريض'}
+                  </h3>
+                  <Badge tone={priority.tone}>الأولوية: {priority.label}</Badge>
+                  {f.status === 'resolved' && <Badge tone="green">تم الحل</Badge>}
+                </div>
+                <p className="mt-1 text-[14px] text-[#657381]">
+                  <strong>{redFlagLabel(f.type, f.source)}</strong>
+                  {f.reason && <> · {f.reason}</>}
+                </p>
+                <p className="mt-1 text-[12px] text-[#657381]">المعالج: {f.therapistName} · تم الرصد: {formatAdminDate(f.detectedAt)}</p>
               </div>
-              <p className="mt-1 text-[14px] text-[#657381]">
-                <strong>{redFlagLabel(f.type, f.source)}</strong>
-                {f.reason && <> · {f.reason}</>}
-              </p>
-              <p className="mt-1 text-[12px] text-[#657381]">المعالج: {f.therapistName} · تم الرصد: {formatAdminDate(f.detectedAt)}</p>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          )
+        })}
       </div>
 
       {full && API_MOCK && (

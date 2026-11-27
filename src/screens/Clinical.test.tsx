@@ -63,6 +63,26 @@ it('does not load or expose case details to the count-only Admin role', async ()
   }
 })
 
+it('counts only open high-priority rows and labels medium and unknown separately', async () => {
+  auth.role = 'clinical_supervisor'
+  const response = await redFlags()
+  const data = [
+    ['high', 'open'], ['medium', 'open'], ['low', 'open'], ['high', 'resolved'], ['unknown', 'open'],
+  ].map(([priority, status], index) => ({ ...response.data[0], id: String(index), priority, status }))
+  redFlags.mockResolvedValue({ ...response, data })
+  const { default: Clinical } = await import('./Clinical')
+  const view = mount()
+  try {
+    await view.render(<Clinical />)
+    const content = view.container.textContent
+    expect(content).toContain('1 حالة مفتوحة ذات أولوية عالية')
+    for (const label of ['متوسطة', 'منخفضة', 'غير معروفة', 'تم الحل']) expect(content).toContain(label)
+    expect(content).not.toContain('حالة حرجة')
+  } finally {
+    await view.unmount()
+  }
+})
+
 it.each(['clinical_supervisor', 'super_admin'] as const)('loads live rows without exposing unsupported clinical actions to %s', async (role) => {
   auth.role = role
   const { default: Clinical } = await import('./Clinical')

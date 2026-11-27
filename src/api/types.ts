@@ -102,7 +102,7 @@ export interface ApiRedFlag {
   patient_whatsapp?: string | null
   type: string
   source?: string | null
-  priority: 'high' | 'medium' | 'low'
+  priority: string
   status: 'open' | 'assigned' | 'resolved' | string
   description: string
   action_taken: string | null
@@ -124,7 +124,7 @@ export interface ApiRedFlagStats {
   total: number; open: number; resolved: number; high_priority: number; by_type: Record<string, number>
 }
 
-export type ApiRedFlagCounts = Record<'open' | 'resolved', Record<ApiRedFlag['priority'], number>>
+export type ApiRedFlagCounts = Record<'open' | 'resolved', Record<'high' | 'medium' | 'low', number>>
 
 export type TherapistApproval = 'pending' | 'approved' | 'rejected'
 export type TherapistLifecycle = 'invited' | 'awaiting_profile' | 'pending_review' | 'needs_changes' | 'approved' | 'update_pending' | 'suspended'

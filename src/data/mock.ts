@@ -110,7 +110,6 @@ export const redFlags: RedFlag[] = [
     assigneeName: 'د. سارة أحمد',
     therapistName: 'د. نور حسن',
     reason: 'أشار المريض في السؤال التاسع من PHQ-9 إلى أفكار لإيذاء النفس.',
-    level: 'حرج',
     assessmentScore: 27,
     onHold: true,
     allowedDecisions: ['reactivate', 'keep_hold'],
@@ -131,7 +130,6 @@ export const redFlags: RedFlag[] = [
     assigneeName: null,
     therapistName: 'د. سارة أحمد',
     reason: 'درجة PHQ-9 مرتفعة.',
-    level: 'عالي',
     assessmentScore: 18,
     onHold: false,
     allowedDecisions: ['close'],
@@ -152,7 +150,6 @@ export const redFlags: RedFlag[] = [
     assigneeName: null,
     therapistName: null,
     reason: 'عدم الالتزام بالخطة العلاجية.',
-    level: 'متوسط',
     assessmentScore: null,
     onHold: false,
     allowedDecisions: [],
@@ -177,7 +174,6 @@ export function applyRedFlagDecision(
   flag.actionTaken = [flag.actionTaken, note].filter(Boolean).join('\n\n')
   if (decision === 'reactivate' || decision === 'close') {
     flag.status = 'resolved'
-    flag.level = 'تم الحل'
     flag.allowedDecisions = []
   }
   if (decision === 'reactivate') {

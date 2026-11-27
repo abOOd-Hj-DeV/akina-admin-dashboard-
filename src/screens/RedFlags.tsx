@@ -7,14 +7,8 @@ import { useAsync } from '../hooks/useAsync'
 import { Badge, Banner, Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 import { formatAdminDate, localizeAdminTimestamps } from '../lib/format-date'
-import { redFlagLabel } from '../lib/red-flag-label'
+import { redFlagLabel, redFlagPriority } from '../lib/red-flag-label'
 import type { RedFlag } from '../types'
-
-const PRIORITY_LABELS = {
-  high: 'عالية',
-  medium: 'متوسطة',
-  low: 'منخفضة',
-} as const
 
 type Decision = RedFlag['allowedDecisions'][number]
 
@@ -103,7 +97,7 @@ export function RedFlagCard({
 }) {
   const [decisionOpen, setDecisionOpen] = useState(false)
   const whatsapp = flag.patientWhatsapp?.replace(/\D/g, '')
-  const priority = PRIORITY_LABELS[flag.priority]
+  const priority = redFlagPriority(flag.priority)
   const canDecide = full && flag.allowedDecisions.length > 0
 
   return (
@@ -112,9 +106,8 @@ export function RedFlagCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-[16px] font-bold text-[#1f1f21]">{flag.patientName}</h2>
-            <Badge tone={flag.priority === 'high' ? 'red' : flag.priority === 'medium' ? 'amber' : 'blue'}>
-              الأولوية: {priority}
-            </Badge>
+            <Badge tone={priority.tone}>الأولوية: {priority.label}</Badge>
+            {flag.status === 'resolved' && <Badge tone="green">تم الحل</Badge>}
             {flag.onHold && <Badge tone="red">الحساب معلّق</Badge>}
             {flag.reactivationRequestedAt && (
               <Badge tone="amber">طلب إعادة تفعيل · {formatAdminDate(flag.reactivationRequestedAt)}</Badge>
