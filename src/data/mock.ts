@@ -193,10 +193,10 @@ export const auditLog: AuditEntry[] = [
 ]
 
 export const docRequests: DocRequest[] = [
-  { id: 'DR-021', subject: 'مشاركة ملف المريض P-1156 مع جهة إحالة خارجية', reason: 'إحالة طبية عاجلة — تقرير الحالة مطلوب', requestedBy: 'د. نور حسن', date: '2025-11-18', status: 'قيد المراجعة' },
-  { id: 'DR-019', subject: 'طلب تغيير معالج للمريضة فاطمة ع.', reason: 'طلب المريضة — عدم توافق أسلوب العلاج', requestedBy: 'Support', date: '2025-11-17', status: 'قيد المراجعة' },
-  { id: 'DR-014', subject: 'مستند هوية للمعالج T-124', reason: 'استكمال اعتماد الترخيص المهني', requestedBy: 'Compliance', date: '2025-11-16', status: 'مقبول' },
-  { id: 'DR-011', subject: 'تقرير تقدم شهري للمريض P-1044', reason: 'طلب ولي الأمر', requestedBy: 'Support', date: '2025-11-15', status: 'مرفوض' },
+  { id: 'DR-021', subject: 'شهادة', reason: 'توثيق مؤهل إضافي', requestedBy: 'عرض تجريبي', date: '2025-11-18', status: 'requested' },
+  { id: 'DR-019', subject: 'ملف داعم', reason: 'استكمال طلب سابق', requestedBy: 'عرض تجريبي', date: '2025-11-17', status: 'submitted', hasFile: true },
+  { id: 'DR-014', subject: 'إثبات هوية', reason: 'التحقق من البيانات', requestedBy: 'عرض تجريبي', date: '2025-11-16', status: 'approved' },
+  { id: 'DR-011', subject: 'شهادة', reason: 'توثيق مؤهل إضافي', requestedBy: 'عرض تجريبي', date: '2025-11-15', status: 'rejected' },
 ]
 
 export const tickets: Ticket[] = [

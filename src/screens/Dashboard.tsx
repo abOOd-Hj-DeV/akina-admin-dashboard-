@@ -82,9 +82,9 @@ export default function Dashboard() {
       sub: 'حالات تحتاج إشرافاً فورياً', to: '/red-flags', badge: 'red' as const, kind: 'clinical',
     },
     {
-      icon: 'file', label: 'طلبات ملفات', count: docRequests.filter((d) => d.status === 'قيد المراجعة').length,
+      icon: 'file', label: 'طلبات ملفات', count: docRequests.filter((d) => d.status === 'submitted').length,
       loading: docRequestState.loading, error: docRequestState.error,
-      sub: 'طلبات تغيير معالج إلخ', to: '/doc-requests', badge: 'blue' as const, kind: 'ops',
+      sub: 'مستندات تحتاج مراجعة', to: '/doc-requests', badge: 'blue' as const, kind: 'ops',
     },
     {
       icon: 'ticket', label: 'تذاكر مفتوحة', count: tickets.filter((t) => t.status === 'مفتوحة').length,

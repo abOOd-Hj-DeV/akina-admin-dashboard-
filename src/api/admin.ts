@@ -68,6 +68,8 @@ export const adminApi = {
   // طلبات الملفات — admin, super_admin فقط
   documents: (page?: number) => api.get<Page<ApiDocument>>(`/api/v1/admin/documents${qs({ page })}`),
   document: (id: string) => api.get<{ data: ApiDocument }>(`/api/v1/admin/documents/${id}`),
+  requestDocument: (user_id: string, doc_type: string, reason?: string) =>
+    api.post<{ data: ApiDocument }>('/api/v1/admin/documents', { user_id, doc_type, reason }),
   reviewDocument: (id: string, action: 'approve' | 'reject', note?: string) =>
     api.post(`/api/v1/admin/documents/${id}/review`, { action, note }),
 
