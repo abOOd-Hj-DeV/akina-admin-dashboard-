@@ -7,8 +7,7 @@ import type { Role } from '../types'
 import { DEFAULT_COUNTRY } from '../lib/phone'
 import { buildInvite, mapInviteErrors, type InviteField as Field } from '../lib/invite'
 import { useFieldErrors } from '../hooks/useFieldErrors'
-import { useAsync } from '../hooks/useAsync'
-import { getTherapistOptions, inviteUser } from '../services/data'
+import { inviteUser } from '../services/data'
 import { Btn, Card } from './ui'
 import PhoneInput, { FieldError } from './PhoneInput'
 
@@ -26,22 +25,15 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
   const [wa, setWa] = useState('')
   const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY)
   const [role, setRole] = useState<ApiRole>(roles[0])
-  const [specialty, setSpecialty] = useState('')
-  const [tCountry, setTCountry] = useState('')
-  const [languages, setLanguages] = useState<string[]>([])
+  const [applicationRef, setApplicationRef] = useState('')
   const [busy, setBusy] = useState(false)
   const { errors, clear, reset, replace } = useFieldErrors<Field>()
   const isTherapist = role === 'therapist'
-  const { data: options, loading: optionsLoading } = useAsync(
-    () => isTherapist ? getTherapistOptions() : Promise.resolve(null),
-    [isTherapist],
-    { interval: 0 },
-  )
 
   const submit = async () => {
-    if (busy || (isTherapist && !options)) return
+    if (busy) return
     reset()
-    const { body, errors: local } = buildInvite({ name, email, whatsapp: wa, country, role, specialty, therapistCountry: tCountry, languages })
+    const { body, errors: local } = buildInvite({ name, email, whatsapp: wa, country, role, applicationRef })
     if (!body) { replace(local); return }
     setBusy(true)
     try {
@@ -63,10 +55,10 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
             <input value={name} onChange={(e) => { setName(e.target.value); clear('name') }} placeholder="الاسم" aria-label="الاسم" className={`${box} ${tone(errors.name)}`} />
             <FieldError>{errors.name}</FieldError>
           </div>
-          <div>
+          {!isTherapist && <div>
             <input value={email} onChange={(e) => { setEmail(e.target.value); clear('email') }} placeholder="البريد الإلكتروني" aria-label="البريد الإلكتروني" dir="ltr" className={`${box} ${tone(errors.email)}`} />
             <FieldError>{errors.email}</FieldError>
-          </div>
+          </div>}
           <PhoneInput
             id="invite-whatsapp"
             value={wa}
@@ -84,41 +76,21 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
             </div>
           ) : null}
           {isTherapist && (
-            <>
+            <div>
               <label className="text-sm">
-                التخصص
-                <select value={specialty} onChange={(e) => { setSpecialty(e.target.value); clear('therapist.specialty') }}
-                  disabled={!options || busy} className={`${box} ${tone(errors['therapist.specialty'])}`}>
-                  <option value="">اختر التخصص</option>
-                  {options?.specialties.map(({ code, name_ar }) => <option key={code} value={code}>{name_ar}</option>)}
-                </select>
-                <FieldError>{errors['therapist.specialty']}</FieldError>
+                رقم طلب التقديم
+                <input value={applicationRef} onChange={(e) => { setApplicationRef(e.target.value); clear('therapist.application_ref') }}
+                  dir="ltr" autoCapitalize="characters" spellCheck={false} required
+                  aria-invalid={!!errors['therapist.application_ref']} aria-describedby="invite-application-ref-error"
+                  className={`${box} ${tone(errors['therapist.application_ref'])}`} />
               </label>
-              <label className="text-sm">
-                الدولة
-                <select value={tCountry} onChange={(e) => { setTCountry(e.target.value); clear('therapist.country') }}
-                  disabled={!options || busy} className={`${box} ${tone(errors['therapist.country'])}`}>
-                  <option value="">اختر الدولة</option>
-                  {options?.countries.map(({ code, name_ar }) => <option key={code} value={code}>{name_ar}</option>)}
-                </select>
-                <FieldError>{errors['therapist.country']}</FieldError>
-              </label>
-              <label className="text-sm md:col-span-2">
-                اللغات (اختياري، يمكنك اختيار أكثر من لغة)
-                <select multiple value={languages} size={4} disabled={!options || busy}
-                  onChange={(e) => { setLanguages(Array.from(e.currentTarget.selectedOptions, o => o.value)); clear('therapist.languages') }}
-                  className={`${box} ${tone(errors['therapist.languages'])}`}>
-                  {options?.languages.map(({ code, name_ar }) => <option key={code} value={code}>{name_ar}</option>)}
-                </select>
-                <FieldError>{errors['therapist.languages']}</FieldError>
-              </label>
-              {optionsLoading && <p role="status" className="text-sm text-[#657381]">جارٍ تحميل خيارات المعالج…</p>}
-            </>
+              <FieldError id="invite-application-ref-error">{errors['therapist.application_ref']}</FieldError>
+            </div>
           )}
         </div>
         {errors.form && <p role="alert" className="rounded-xl bg-red-50 px-4 py-2 text-[12px] font-medium text-[#fd4438]">{errors.form}</p>}
         <div className="flex gap-2">
-          <Btn tone="green" type="submit" disabled={busy || (isTherapist && !options)}>{busy ? 'جارٍ الإرسال…' : 'إرسال الدعوة'}</Btn>
+          <Btn tone="green" type="submit" disabled={busy}>{busy ? 'جارٍ الإرسال…' : 'إرسال الدعوة'}</Btn>
           <Btn tone="ghost" type="button" onClick={onCancel}>إلغاء</Btn>
         </div>
       </form>

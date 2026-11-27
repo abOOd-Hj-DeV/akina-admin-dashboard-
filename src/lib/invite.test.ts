@@ -6,22 +6,23 @@ import { buildInvite, mapInviteErrors } from './invite'
 const base = { name: ' د. ريم ', email: 'reem@sakina.app', whatsapp: '0983321260', country: 'SY' as const }
 
 describe('دعوة مستخدم (POST /admin/users)', () => {
-  it('دعوة معالج ترسل therapist.specialty/country/languages والرقم بصيغة E.164', () => {
-    const { body, errors } = buildInvite({ ...base, role: 'therapist', specialty: 'anxiety', therapistCountry: 'SY', languages: ['ar', 'en'] })
+  it('دعوة معالج ترسل رقم طلب التقديم والرقم بصيغة E.164 بدون بريد إلكتروني', () => {
+    const { body, errors } = buildInvite({ ...base, role: 'therapist', applicationRef: ' app-42 ' })
     expect(errors).toEqual({})
     expect(body).toEqual({
-      name: 'د. ريم', email: 'reem@sakina.app', whatsapp_number: '+963983321260', role: 'therapist',
-      therapist: { specialty: 'anxiety', country: 'SY', languages: ['ar', 'en'] },
+      name: 'د. ريم', whatsapp_number: '+963983321260', role: 'therapist',
+      therapist: { application_ref: 'APP-42' },
     })
   })
-  it('اللغات اختيارية', () => {
-    const { body } = buildInvite({ ...base, role: 'therapist', specialty: 'x', therapistCountry: 'SY', languages: [] })
-    expect(body?.therapist).toEqual({ specialty: 'x', country: 'SY' })
-  })
-  it('التخصص والدولة مطلوبان للمعالج', () => {
-    const { body, errors } = buildInvite({ ...base, role: 'therapist' })
+  it.each([undefined, 'A', '-APP', 'APP 42', 'A'.repeat(41)])('رقم طلب التقديم مطلوب ويجب أن يطابق الصيغة (%s)', applicationRef => {
+    const { body, errors } = buildInvite({ ...base, role: 'therapist', applicationRef })
     expect(body).toBeNull()
-    expect(Object.keys(errors).sort()).toEqual(['therapist.country', 'therapist.specialty'])
+    expect(Object.keys(errors)).toEqual(['therapist.application_ref'])
+  })
+  it('البريد الإلكتروني لا يزال مطلوبًا لبقية الدعوات', () => {
+    const { body, errors } = buildInvite({ ...base, role: 'support_agent', email: '' })
+    expect(body).toBeNull()
+    expect(Object.keys(errors)).toEqual(['email'])
   })
   it.each(['support_agent', 'content_manager', 'admin'] as const)('دعوة %s بدون حقول المعالج', (role) => {
     const { body } = buildInvite({ ...base, role })
@@ -33,7 +34,7 @@ describe('دعوة مستخدم (POST /admin/users)', () => {
     expect(errors.whatsapp_number).toBe('رقم واتساب غير صحيح.')
   })
   it('أخطاء الخادم تُوزّع على الحقول', () => {
-    expect(mapInviteErrors({ email: 'taken', 'therapist.languages.0': 'bad' }, 'x')).toEqual({ email: 'taken', 'therapist.languages': 'bad' })
+    expect(mapInviteErrors({ email: 'taken', 'therapist.application_ref': 'bad' }, 'x')).toEqual({ email: 'taken', 'therapist.application_ref': 'bad' })
     expect(mapInviteErrors({}, 'Forbidden')).toEqual({ form: 'Forbidden' })
   })
   it('رقم غير مسجل على واتساب → رسالة عربية تحت حقل الرقم', () => {

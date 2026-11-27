@@ -9,7 +9,9 @@ import { therapistDate, THERAPIST_STATUS } from '../lib/therapists'
 import { listTherapists } from '../services/data'
 import { TherapistActionDialog, TherapistDetails, type TherapistAction } from './therapistDialogs'
 
-const filters = ['all', 'not_submitted', 'pending', 'approved', 'rejected'] as const
+const filterLabels: Record<TherapistFilter, string> = {
+  all: 'الكل', ...THERAPIST_STATUS, changes_pending: 'تعديلات بانتظار المراجعة',
+}
 const statusTones = { not_submitted: 'gray', pending: 'amber', approved: 'green', rejected: 'red' } as const
 const PAGE_SIZE = 15
 
@@ -23,10 +25,12 @@ export default function Therapists() {
 function TherapistRoster({ readOnly }: { readOnly: boolean }) {
   const { role } = useAuth()
   const [status, setStatus] = useState<TherapistFilter>('all')
+  const [search, setSearch] = useState('')
+  const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const { data, loading, error, refreshing, reload } = useAsync(
-    () => listTherapists({ status, page, per_page: PAGE_SIZE }),
-    [status, page],
+    () => listTherapists({ status, page, per_page: PAGE_SIZE, q: query }),
+    [status, page, query],
   )
   const pagination = data?.pagination
   const lastPage = pagination?.last_page
@@ -34,7 +38,7 @@ function TherapistRoster({ readOnly }: { readOnly: boolean }) {
   if (pageOutOfRange) setPage(lastPage)
 
   const [inviting, setInviting] = useState(false)
-  const [message, setMessage] = useState('')
+  const [notice, setNotice] = useState<{ message: string; conflict?: boolean } | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [action, setAction] = useState<TherapistAction | null>(null)
   const canInvite = !readOnly && canInviteTherapist(role)
@@ -45,13 +49,16 @@ function TherapistRoster({ readOnly }: { readOnly: boolean }) {
       <PageHeader
         title="إدارة المعالجين"
         sub={readOnly ? 'قراءة فقط حسب صلاحياتك' : undefined}
-        action={canInvite ? <Btn onClick={() => { setInviting(v => !v); setMessage('') }}>+ دعوة معالج</Btn> : undefined}
+        action={canInvite ? <Btn onClick={() => { setInviting(v => !v); setNotice(null) }}>+ دعوة معالج</Btn> : undefined}
       />
-      {message && <p role="status" className="mb-3 rounded-xl bg-[#c7e4e7]/50 px-4 py-2 text-[13px] font-medium text-[#135e66]">{message}</p>}
+      {notice && (
+        <p role={notice.conflict ? 'alert' : 'status'} className={`mb-3 rounded-xl px-4 py-2 text-[13px] font-medium ${notice.conflict
+          ? 'bg-amber-50 text-amber-900' : 'bg-[#c7e4e7]/50 text-[#135e66]'}`}>{notice.message}</p>
+      )}
       {canInvite && inviting && (
         <InviteUserForm roles={['therapist']} onCancel={() => setInviting(false)} onDone={() => {
           setInviting(false)
-          setMessage('أُرسلت الدعوة عبر واتساب. سيظهر الطلب قيد المراجعة بعد إرسال الرخصة.')
+          setNotice({ message: 'أُرسلت الدعوة عبر واتساب. سيظهر الطلب قيد المراجعة بعد إرسال الملف المهني.' })
           void reload()
         }} />
       )}
@@ -63,9 +70,21 @@ function TherapistRoster({ readOnly }: { readOnly: boolean }) {
               setStatus(e.target.value as TherapistFilter)
               setPage(1)
             }}>
-              {filters.map(value => <option key={value} value={value}>{value === 'all' ? 'الكل' : THERAPIST_STATUS[value]}</option>)}
+              {Object.entries(filterLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           </label>
+          <form role="search" className="flex flex-wrap items-center gap-2" onSubmit={e => {
+            e.preventDefault()
+            const nextQuery = search.trim()
+            if (nextQuery === query && page === 1) void reload()
+            else { setQuery(nextQuery); setPage(1) }
+          }}>
+            <input type="search" value={search} onChange={e => setSearch(e.target.value)} dir="auto"
+              aria-label="بحث عن معالج" placeholder="الاسم، رقم الطلب، أو واتساب"
+              className="rounded-xl border border-[#ebebeb] px-3 py-2 text-sm" />
+            <Btn tone="outline" type="submit">بحث</Btn>
+            {query && <Btn tone="ghost" onClick={() => { setQuery(''); setSearch(''); setPage(1) }}>مسح البحث</Btn>}
+          </form>
           <Btn tone="outline" disabled={loading || refreshing} onClick={() => void reload()}>تحديث القائمة</Btn>
           {refreshing && <span role="status" className="text-[14px] text-[#657381]">جارٍ تحديث القائمة…</span>}
         </div>
@@ -73,27 +92,27 @@ function TherapistRoster({ readOnly }: { readOnly: boolean }) {
           <DataState loading={loading || pageOutOfRange} error={error} hasData={data !== undefined}
             empty={!refreshing && data?.data.length === 0} emptyMessage="لا يوجد معالجون بهذه الحالة." onRetry={reload} />
           {!!data?.data.length && !pageOutOfRange && (
-            <Table cols={['الرقم', 'الاسم', 'حالة الطلب', 'المرضى', 'التقييم', 'تاريخ الانضمام', 'إجراءات']}>
+            <Table cols={['الرقم', 'رقم الطلب', 'الاسم', 'حالة الطلب', 'المرضى', 'التقييم', 'تاريخ الانضمام', 'إجراءات']}>
               {data.data.map((t, index) => {
                 const approval = t.approval_status ?? 'not_submitted'
                 const disabled = !!action || !!error
                 return (
                   <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-[#f7f7f7]/60">
                     <td className="px-3 py-3 font-bold">{(data.pagination.current_page - 1) * PAGE_SIZE + index + 1}</td>
+                    <td className="px-3 py-3"><bdi>{t.application_ref ?? '—'}</bdi></td>
                     <td className="px-3 py-3">{t.full_name}</td>
-                    <td className="px-3 py-3"><Badge tone={statusTones[approval]}>{THERAPIST_STATUS[approval]}</Badge></td>
+                    <td className="px-3 py-3">
+                      <Badge tone={statusTones[approval]}>{THERAPIST_STATUS[approval]}</Badge>
+                      {t.pending_revision?.kind === 'update' && (
+                        <div className="mt-1"><Badge tone="amber">{filterLabels.changes_pending}</Badge></div>
+                      )}
+                    </td>
                     <td className="px-3 py-3 text-[#657381]">{t.clients_count}</td>
                     <td className="px-3 py-3 text-[#657381]">{t.rating ?? 'لا تقييمات'}</td>
                     <td className="px-3 py-3 text-[#657381]">{therapistDate(t.created_at)}</td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap gap-1.5">
-                        <Btn tone="ghost" onClick={() => setDetailId(t.id)}>عرض</Btn>
-                        {canDecide && t.approval_status === 'pending' && t.has_license && (
-                          <>
-                            <Btn tone="green" disabled={disabled} onClick={() => setAction({ kind: 'approve', therapist: t })}>قبول</Btn>
-                            <Btn tone="danger-soft" disabled={disabled} onClick={() => setAction({ kind: 'reject', therapist: t })}>رفض</Btn>
-                          </>
-                        )}
+                        <Btn tone="ghost" onClick={() => { setNotice(null); setDetailId(t.id) }}>عرض</Btn>
                         {canToggleTherapist(role) && (
                           <Btn tone="outline" disabled={disabled} onClick={() => setAction({ kind: 'active', therapist: t })}>{t.is_active ? 'تعليق' : 'تفعيل'}</Btn>
                         )}
@@ -116,11 +135,22 @@ function TherapistRoster({ readOnly }: { readOnly: boolean }) {
           </nav>
         )}
       </Card>
-      {detailId && <TherapistDetails key={detailId} id={detailId} canViewLicense={canDecide} onClose={() => setDetailId(null)} />}
-      {action && <TherapistActionDialog action={action} onClose={() => setAction(null)} onDone={async (result) => {
-        setMessage(result)
-        await reload()
-      }} />}
+      {detailId && <TherapistDetails key={detailId} id={detailId} canDecide={canDecide}
+        onDecide={setAction} onClose={() => setDetailId(null)} />}
+      {action && (
+        <TherapistActionDialog action={action} onClose={() => setAction(null)}
+          onConflict={message => {
+            setNotice({ message, conflict: true })
+            setAction(null)
+            setDetailId(null)
+            void reload()
+          }}
+          onDone={async message => {
+            setNotice({ message })
+            if (action.kind === 'approve' || action.kind === 'reject') setDetailId(null)
+            await reload()
+          }} />
+      )}
     </>
   )
 }
