@@ -286,6 +286,7 @@ export interface ApiAdminUser {
   is_active: boolean
   activated?: boolean
   pending_invitation?: boolean
+  allowed_staff_actions?: ('deactivate' | 'reactivate')[]
   last_login?: string | null
   created_at: string
 }

@@ -61,6 +61,30 @@ it('refreshes pending invitations automatically', async () => {
   await view.unmount()
 })
 
+it('renders only server-authorized staff status actions and reloads a stale row after refusal', async () => {
+  auth.role = 'super_admin'
+  const own = { ...accepted, id: 'self', name: 'own row', role: 'super_admin', allowed_staff_actions: [] }
+  const target = { ...accepted, id: 'target', name: 'another row', allowed_staff_actions: ['deactivate'] }
+  const legacy = { ...accepted, id: 'old', name: 'unverified capability' }
+  adminApi.users.mockReset().mockResolvedValueOnce({ data: [own, target, legacy], last_page: 1 })
+    .mockResolvedValueOnce({ data: [own, { ...target, allowed_staff_actions: [] }, legacy], last_page: 1 })
+  adminApi.setUserActive.mockReset().mockRejectedValueOnce(new Error('refused'))
+  const { default: Users } = await import('./Users')
+  const view = mount()
+  try {
+    await view.render(<MemoryRouter><Users /></MemoryRouter>)
+    const [selfRow, targetRow, legacyRow] = view.container.querySelectorAll('tbody tr')
+    expect(selfRow.querySelector('button')).toBeNull()
+    expect(legacyRow.querySelector('button')).toBeNull()
+    await act(async () => targetRow.querySelector('button')!.click())
+    expect(adminApi.setUserActive).toHaveBeenCalledWith('target', false)
+    expect(view.container.textContent).toContain('refused')
+    expect(view.container.querySelectorAll('tbody button')).toHaveLength(0)
+  } finally {
+    await view.unmount()
+  }
+})
+
 it('routes an admin from a therapist user row to that therapist’s read-only lifecycle details', async () => {
   const user = { ...accepted, id: 'therapist-1', role: 'therapist', name: 'معالج تجريبي' }
   adminApi.users.mockReset().mockResolvedValue({ data: [user, pending], last_page: 1 })

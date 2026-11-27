@@ -45,11 +45,18 @@ export default function Users() {
   )
 
   const toggle = async (u: ApiAdminUser) => {
+    if (working || !u.allowed_staff_actions?.includes(u.is_active ? 'deactivate' : 'reactivate')) return
+    setWorking(true)
     setErr(null)
+    setNotice(null)
     try {
-      if (!API_MOCK) await adminApi.setUserActive(u.id, !u.is_active)
+      await adminApi.setUserActive(u.id, !u.is_active)
+    } catch (e) {
+      setErr(errText(e, 'تعذّر تغيير حالة الحساب.'))
+    } finally {
       reload()
-    } catch (e) { setErr(errText(e, 'تعذّر تغيير حالة الحساب.')) }
+      setWorking(false)
+    }
   }
   const manageInvitation = async (u: ApiAdminUser, kind: 'cancel' | 'resend') => {
     if (!canManage(u) || !u.pending_invitation || working) return
@@ -104,15 +111,15 @@ export default function Users() {
                     عرض ملف المعالج
                   </Link>
                 )}
-                {canManage(u) && (
+                {u.role !== 'therapist' && (
                   <div className="flex gap-1.5">
-                    {u.pending_invitation ? (
+                    {u.pending_invitation && canManage(u) ? (
                       <>
                         <Btn tone="ghost" disabled={working || loading} onClick={() => void manageInvitation(u, 'resend')}>إعادة الدعوة</Btn>
                         <Btn tone="danger-soft" disabled={working || loading} onClick={() => void manageInvitation(u, 'cancel')}>إلغاء الدعوة</Btn>
                       </>
-                    ) : u.activated !== false && (
-                      <Btn tone={u.is_active ? 'danger-soft' : 'outline'} className="px-3 py-1.5 text-[12px]" onClick={() => void toggle(u)}>
+                    ) : u.allowed_staff_actions?.includes(u.is_active ? 'deactivate' : 'reactivate') && (
+                      <Btn tone={u.is_active ? 'danger-soft' : 'outline'} disabled={working || loading} className="px-3 py-1.5 text-[12px]" onClick={() => void toggle(u)}>
                         {u.is_active ? 'تعطيل' : 'تفعيل'}
                       </Btn>
                     )}
