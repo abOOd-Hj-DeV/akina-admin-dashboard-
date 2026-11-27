@@ -170,6 +170,7 @@ export function TherapistDetails({ id, role, listRow, listRefreshing, listError,
   const copy = lifecycleCopy(details?.lifecycle_state)
   const rejection = details?.last_rejected_revision
   const reason = rejection?.review_note ?? (details?.last_review?.status === 'rejected' ? details.last_review.note : details?.approval_note)
+  const approvalNote = details?.last_review?.status === 'approved' ? details.last_review.note : null
   const fields: [string, ReactNode][] = details ? [
     ['رقم واتساب', <bdi key="whatsapp">{details.whatsapp_number ?? '—'}</bdi>],
     ['التحقق من واتساب', verificationLabel(details)],
@@ -207,6 +208,10 @@ export function TherapistDetails({ id, role, listRow, listRefreshing, listError,
                   onClick={() => begin({ kind, therapist: details, revision })}>{THERAPIST_ACTIONS[kind].label}</Btn>
               ))}
             </div>} />
+          {approvalNote && <Card>
+            <h3 className="mb-2 font-bold">ملاحظة الموافقة</h3>
+            <p className="whitespace-pre-wrap break-words text-sm">{approvalNote}</p>
+          </Card>}
           <Card>
             <h3 className="mb-2 font-bold">بيانات الحساب</h3>
             <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">

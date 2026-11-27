@@ -214,6 +214,24 @@ it.each([[undefined], [null], [[]], [['view', 'unknown']]])('denies absent or un
   expect(button(dialog(container), 'تعليق الحساب')).toBeUndefined()
 })
 
+it('shows the latest approval note separately from an earlier rejection reason', async () => {
+  const approved: ApiAdminTherapistDetail = {
+    ...rows[1],
+    last_review: {
+      revision_id: update.id, kind: 'update', status: 'approved', note: 'الملف يطابق طلب التقديم',
+      reviewed_at: '2026-04-04T12:15:00Z',
+    },
+    last_rejected_revision: { ...revision, status: 'rejected', review_note: 'البيانات السابقة غير مكتملة' },
+  }
+  fetchMock.mockImplementation(async url => url === root + '/' + approved.id ? json({ data: approved }) : defaultResponse(url))
+  const container = await render()
+  await openDetails(container, 1)
+  const drawer = dialog(container)
+  const note = Array.from(drawer.querySelectorAll('h3')).find(heading => heading.textContent === 'ملاحظة الموافقة')
+  expect(note?.nextElementSibling?.textContent).toBe('الملف يطابق طلب التقديم')
+  expect(drawer.textContent).toContain('سبب الرفض: البيانات السابقة غير مكتملة')
+})
+
 it('confirms approval with an optional note and prevents double submission before refreshing', async () => {
   const endpoint = root + '/' + pending.id + '/approve'
   let resolve!: (response: Response) => void
