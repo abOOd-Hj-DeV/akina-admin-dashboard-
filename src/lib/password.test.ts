@@ -13,4 +13,12 @@ describe('سياسة كلمة المرور (عقد §3)', () => {
     expect(meetsPasswordPolicy(p)).toBe(false)
     expect(passwordError(p)).toBe(PASSWORD_POLICY_MSG)
   })
+  it.each([
+    ['abcde1🙂', false],
+    ['abcdef1🙂', true],
+    ['كلمةسر١٢', true],
+    ['كلمةس١٢', false],
+  ])('counts Unicode code points and recognizes Laravel letter/number classes', (input, valid) => {
+    expect(meetsPasswordPolicy(input)).toBe(valid)
+  })
 })
