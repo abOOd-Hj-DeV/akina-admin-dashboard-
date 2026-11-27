@@ -25,7 +25,7 @@ export const adminApi = {
   patient: (id: string) => api.get<{ data: ApiAdminPatientDetail }>(`/api/v1/admin/patients/${id}`),
 
   // المعالجون — admin, super_admin فقط
-  therapists: () => api.get<Page<ApiAdminTherapist>>('/api/v1/admin/therapists'),
+  therapists: (f: { page?: number } = {}) => api.get<Page<ApiAdminTherapist>>(`/api/v1/admin/therapists${qs(f)}`),
   approveTherapist: (id: string) => api.post(`/api/v1/admin/therapists/${id}/approve`),
   rejectTherapist: (id: string, body?: { reason?: string }) => api.post(`/api/v1/admin/therapists/${id}/reject`, body ?? {}),
   setClientsLimit: (id: string, clients_limit: number) =>
@@ -52,7 +52,7 @@ export const adminApi = {
   ) => api.post<{ message: string; data: ApiRedFlag }>(`/api/v1/admin/red-flags/${id}/decision`, body),
 
   // البرامج — + clinical_supervisor
-  programs: () => api.get<Page<ApiProgram>>('/api/v1/admin/programs'),
+  programs: (f: { page?: number } = {}) => api.get<Page<ApiProgram>>(`/api/v1/admin/programs${qs(f)}`),
   createProgram: (body: { name: string; description: string; is_core?: boolean }) =>
     api.post<{ message: string; program: ApiProgram }>('/api/v1/admin/programs', body),
   updateProgram: (id: string, body: Partial<{ name: string; description: string; is_core: boolean }>) =>
@@ -84,7 +84,7 @@ export const adminApi = {
     api.post(`/api/v1/admin/therapist-switches/${id}/review`, { action, note }),
 
   // الأسئلة الشائعة — + content_manager
-  faqs: () => api.get<Page<ApiFaq>>('/api/v1/admin/faqs'),
+  faqs: (f: { page?: number } = {}) => api.get<Page<ApiFaq>>(`/api/v1/admin/faqs${qs(f)}`),
   createFaq: (body: { question: string; answer: string; sort_order?: number }) => api.post('/api/v1/admin/faqs', body),
   updateFaq: (id: string, body: Partial<{ question: string; answer: string; sort_order: number }>) =>
     api.put(`/api/v1/admin/faqs/${id}`, body),

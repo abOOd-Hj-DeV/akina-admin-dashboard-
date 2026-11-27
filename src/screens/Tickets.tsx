@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
 import { listTickets, setTicketStatus } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
-import { Badge, Btn, Card, PageHeader, SearchBar, Table } from '../components/ui'
+import { Badge, Btn, Card, DataState, PageHeader, SearchBar, Table } from '../components/ui'
 import Icon from '../components/Icon'
 
 /** الدعم الفني: الدعم معالجة، المشرف عرض */
@@ -11,16 +11,20 @@ export default function Tickets() {
   const { role } = useAuth()
   const a = role ? access(role, 'tickets') : { level: 'denied' as const }
   const canProcess = a.level === 'full'
-  const { data: tickets = [] } = useAsync(listTickets)
+  const { data, loading, error, reload } = useAsync(listTickets)
+  const tickets = data ?? []
   const [closed, setClosed] = useState<Record<string, boolean>>({})
   const [err, setErr] = useState<string | null>(null)
-  const close = (id: string) => {
+  const close = async (id: string) => {
     setErr(null)
     setClosed((c) => ({ ...c, [id]: true }))
-    void setTicketStatus(id, 'closed').catch((e: unknown) => {
+    try {
+      await setTicketStatus(id, 'closed')
+      await reload()
+    } catch (e: unknown) {
       setClosed((c) => ({ ...c, [id]: false }))
       setErr(e instanceof Error && e.message ? e.message : 'تعذّر إغلاق التذكرة.')
-    })
+    }
   }
 
   return (
@@ -30,6 +34,7 @@ export default function Tickets() {
       <Card className="p-4">
         <SearchBar placeholder="ابحث برقم التذكرة أو العنوان..." />
         <div className="mt-4">
+          <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && tickets.length === 0} onRetry={reload} />
           <Table cols={['رقم', 'العنوان', 'مقدم البلاغ', 'الأولوية', 'الحالة', 'التاريخ', 'إجراءات']}>
             {tickets.map((t) => {
               const st = closed[t.id] ? 'مغلقة' : t.status
@@ -49,7 +54,7 @@ export default function Tickets() {
                     <div className="flex gap-1.5">
                       <Btn tone="ghost" className="px-3 py-1.5 text-[12px]">فتح</Btn>
                       {canProcess && st !== 'مغلقة' && (
-                        <Btn tone="outline" className="px-3 py-1.5 text-[12px]" onClick={() => close(t.id)}>
+                        <Btn tone="outline" className="px-3 py-1.5 text-[12px]" onClick={() => void close(t.id)}>
                           إغلاق
                         </Btn>
                       )}

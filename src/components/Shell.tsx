@@ -4,6 +4,8 @@ import { useAuth } from '../auth/AuthContext'
 import { canView, NAV, ROLE_LABELS } from '../auth/permissions'
 import { API_MOCK } from '../api/client'
 import { adminApi } from '../api/admin'
+import { useAsync } from '../hooks/useAsync'
+import { DataState } from './ui'
 import Icon from './Icon'
 
 const TITLE_FOR: Record<string, string> = { 'patient-profile': 'ملف المريض', account: 'حسابي' }
@@ -20,25 +22,18 @@ export default function Shell() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileNav, setMobileNav] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
-  const [notifCount, setNotifCount] = useState(0)
-  const [notifs, setNotifs] = useState<{ title: string; body: string }[]>([])
   const notifRef = useRef<HTMLDivElement>(null)
+  const { data: notificationData, loading: notificationsLoading, error: notificationsError, reload: reloadNotifications } = useAsync(
+    () => role
+      ? adminApi.notifications().then((response) => (response.data ?? []) as { title?: string; body?: string; message?: string; is_read?: boolean }[])
+      : Promise.resolve([]),
+    [role],
+  )
+  const notifications = notificationData ?? []
+  const notifs = notifications.slice(0, 8).map((n) => ({ title: n.title ?? 'إشعار', body: n.body ?? n.message ?? '' }))
+  const notifCount = notifications.filter((n) => n.is_read === false).length
 
   useEffect(() => { setMobileNav(false); setNotifOpen(false) }, [pathname])
-
-  useEffect(() => {
-    if (!role) return
-    let live = true
-    adminApi.notifications()
-      .then((p) => {
-        if (!live) return
-        const items = (p.data ?? []) as { title?: string; body?: string; message?: string; is_read?: boolean }[]
-        setNotifs(items.slice(0, 8).map((n) => ({ title: n.title ?? 'إشعار', body: n.body ?? n.message ?? '' })))
-        setNotifCount(items.filter((n) => n.is_read === false).length || 0)
-      })
-      .catch(() => {})
-    return () => { live = false }
-  }, [role])
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -134,14 +129,19 @@ export default function Shell() {
                 onClick={() => setNotifOpen((v) => !v)}
               >
                 <Icon name="bell" />
-                {notifCount > 0 && <span className="notif-dot" />}
+                {(notificationsLoading || notificationsError || notifCount > 0) && <span className="notif-dot" title={notificationsLoading ? 'جارٍ التحميل…' : notificationsError ? 'تعذّر التحميل' : `${notifCount}`} />}
               </button>
               {notifOpen && (
                 <div className="notif-panel" role="dialog" aria-label="الإشعارات">
                   <header>الإشعارات</header>
-                  {notifs.length === 0 ? (
-                    <p className="notif-empty">لا توجد إشعارات</p>
-                  ) : (
+                  <DataState
+                    loading={notificationsLoading}
+                    error={notificationsError}
+                    hasData={notificationData !== undefined}
+                    empty={notificationData !== undefined && notifs.length === 0}
+                    onRetry={reloadNotifications}
+                  />
+                  {!notificationsLoading && !notificationsError && notifs.length > 0 && (
                     <ul>
                       {notifs.map((n, i) => (
                         <li key={i}>

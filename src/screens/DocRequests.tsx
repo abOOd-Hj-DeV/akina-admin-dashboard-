@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
 import { listDocRequests, reviewDocument } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
-import { Badge, Btn, Card, PageHeader } from '../components/ui'
+import { Badge, Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 
 /** طلبات الملفات: SuperAdmin+Admin كامل، الدعم يرفع للمدير، المشرف قراءة */
@@ -12,7 +12,8 @@ export default function DocRequests() {
   const a = role ? access(role, 'doc-requests') : { level: 'denied' as const }
   const canAct = a.level === 'full'
   const escalate = a.mask === 'escalate'
-  const { data: docRequests = [] } = useAsync(listDocRequests)
+  const { data, loading, error, reload } = useAsync(listDocRequests)
+  const docRequests = data ?? []
   const [done, setDone] = useState<Record<string, string>>({})
   const [err, setErr] = useState<string | null>(null)
   const act = (id: string, label: string, action?: 'approve' | 'reject') => {
@@ -29,6 +30,7 @@ export default function DocRequests() {
       <PageHeader title="طلبات الملفات" sub={escalate ? 'يمكنك مراجعة الطلبات ورفعها للمدير' : undefined} />
       {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}
       <div className="space-y-4">
+        <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && docRequests.length === 0} onRetry={reload} />
         {docRequests.map((d) => {
           const st = done[d.id] ?? d.status
           return (

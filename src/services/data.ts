@@ -126,31 +126,74 @@ const mapWithdrawal = (w: ApiWithdrawal): Withdrawal => ({
 
 /* ---------- القراءات ---------- */
 
+const fetchPages = async <T>(
+  fetch: (page: number) => Promise<{ data: T[]; pagination?: { current_page: number; last_page: number } }>,
+): Promise<T[]> => {
+  const records: T[] = []
+  let lastPage = 1
+
+  for (let page = 1; page <= lastPage; page++) {
+    const response = await fetch(page)
+    const pagination = response.pagination
+    if (!Array.isArray(response.data) || !pagination || !Number.isInteger(pagination.current_page)
+      || !Number.isInteger(pagination.last_page)
+      || pagination.last_page < 1 || pagination.last_page > 1000
+      || pagination.current_page !== page) {
+      throw new Error('تعذّر تحميل البيانات بسبب ترقيم صفحات غير صالح.')
+    }
+    if (page === 1) lastPage = pagination.last_page
+    else if (pagination.last_page !== lastPage) throw new Error('تعذّر تحميل البيانات بسبب ترقيم صفحات غير متّسق.')
+    records.push(...response.data)
+  }
+
+  return records
+}
+
+const fetchTicketPages = async (): Promise<ApiSupportTicket[]> => {
+  const records: ApiSupportTicket[] = []
+  let lastPage = 1
+
+  for (let page = 1; page <= lastPage; page++) {
+    const paginator = (await adminApi.tickets({ page })).data
+    if (!paginator || !Array.isArray(paginator.data) || !Number.isInteger(paginator.current_page)
+      || !Number.isInteger(paginator.last_page)
+      || paginator.last_page < 1 || paginator.last_page > 1000
+      || paginator.current_page !== page) {
+      throw new Error('تعذّر تحميل البيانات بسبب ترقيم صفحات غير صالح.')
+    }
+    if (page === 1) lastPage = paginator.last_page
+    else if (paginator.last_page !== lastPage) throw new Error('تعذّر تحميل البيانات بسبب ترقيم صفحات غير متّسق.')
+    records.push(...paginator.data)
+  }
+
+  return records
+}
+
 export const listPatients = (f?: Parameters<typeof adminApi.patients>[0]) =>
-  API_MOCK ? wait(mock.patients) : adminApi.patients(f).then(r => r.data.map(mapPatient))
+  API_MOCK ? wait(mock.patients) : fetchPages(page => adminApi.patients({ ...f, page })).then(rows => rows.map(mapPatient))
 
 export const listTherapists = () =>
-  API_MOCK ? wait(mock.therapists) : adminApi.therapists().then(r => r.data.map(mapTherapist))
+  API_MOCK ? wait(mock.therapists) : fetchPages(page => adminApi.therapists({ page })).then(rows => rows.map(mapTherapist))
 
 export const listPayments = () =>
-  API_MOCK ? wait(mock.payments) : adminApi.payments().then(r => r.data.map(mapPayment))
+  API_MOCK ? wait(mock.payments) : fetchPages(page => adminApi.payments(page)).then(rows => rows.map(mapPayment))
 
 export const listWithdrawals = (): Promise<Withdrawal[]> =>
-  API_MOCK ? wait([]) : adminApi.withdrawals().then(r => r.data.map(mapWithdrawal))
+  API_MOCK ? wait([]) : fetchPages(page => adminApi.withdrawals(page)).then(rows => rows.map(mapWithdrawal))
 
 export const listRedFlags = () =>
-  API_MOCK ? wait(mock.redFlags) : adminApi.redFlags().then(r => r.data.map(mapFlag))
+  API_MOCK ? wait(mock.redFlags) : fetchPages(page => adminApi.redFlags({ page })).then(rows => rows.map(mapFlag))
 
 export const countOpenRedFlags = () =>
   API_MOCK ? wait(mock.redFlags.filter(f => f.level !== 'تم الحل').length)
     : adminApi.redFlagCounts().then(r => Object.values(r.data.open).reduce((sum, count) => sum + count, 0))
 
 export const listDocRequests = () =>
-  API_MOCK ? wait(mock.docRequests) : adminApi.documents().then(r => r.data.map(mapDoc))
+  API_MOCK ? wait(mock.docRequests) : fetchPages(page => adminApi.documents(page)).then(rows => rows.map(mapDoc))
 
 // مسار الدعم يرجع paginator لارافيل خام داخل data (الصفوف في data.data)
 export const listTickets = () =>
-  API_MOCK ? wait(mock.tickets) : adminApi.tickets().then(r => (r.data?.data ?? []).map(mapTicket))
+  API_MOCK ? wait(mock.tickets) : fetchTicketPages().then(rows => rows.map(mapTicket))
 
 // الباك اند لا يملك حالة نشر للبرامج؛ كل برنامج مُعاد من /admin/programs منشور فعلياً
 const mapProgram = (p: ApiProgram): Program => ({
@@ -163,29 +206,35 @@ const mapProgram = (p: ApiProgram): Program => ({
 })
 
 export const listPrograms = () =>
-  API_MOCK ? wait(mock.programs) : adminApi.programs().then(r => r.data.map(mapProgram))
+  API_MOCK ? wait(mock.programs) : fetchPages(page => adminApi.programs({ page })).then(rows => rows.map(mapProgram))
 
 export const getOverview = (): Promise<ApiOverview | null> =>
   API_MOCK ? wait(null) : adminApi.overview().then(r => r.data)
 
 export const listAudit = () =>
-  API_MOCK ? wait(mock.auditLog) : adminApi.audit().then(r => r.data.map(mapAudit))
+  API_MOCK ? wait(mock.auditLog) : fetchPages(page => adminApi.audit({ page })).then(rows => rows.map(mapAudit))
 
 export const listFaqs = (): Promise<ApiFaq[]> =>
   API_MOCK ? wait([
     { id: 'F-1', question: 'كيف أرفع إيصال الحوالة؟', answer: 'من صفحة الاشتراك اختر رفع الإيصال.' },
     { id: 'F-2', question: 'متى تُفعّل الباقة؟', answer: 'بعد مراجعة الإيصال خلال 24 ساعة.' },
-  ]) : adminApi.faqs().then(r => r.data)
+  ]) : fetchPages(page => adminApi.faqs({ page }))
+
+export const getPatient = (id?: string | null): Promise<Patient | null> => {
+  if (!id) return wait(null)
+  if (API_MOCK) return wait(mock.patients.find(patient => patient.id === id) ?? null)
+  return adminApi.patient(id).then(response => mapPatient(response.data))
+}
 
 export interface FeedItem { text: string; by: string; at: string; dot: string }
 
 export const activityFeed = (): Promise<FeedItem[]> =>
   API_MOCK
     ? wait(mock.activityFeed)
-    : adminApi.audit().then(r => r.data.slice(0, 8).map(a => ({
+    : listAudit().then(rows => rows.slice(0, 8).map(a => ({
         text: a.action,
-        by: a.actor?.name ?? 'النظام',
-        at: a.timestamp ?? '',
+        by: a.user,
+        at: a.time,
         dot: '#1d919e',
       })))
 

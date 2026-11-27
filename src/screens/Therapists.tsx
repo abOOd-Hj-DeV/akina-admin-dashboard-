@@ -3,17 +3,22 @@ import { useAuth } from '../auth/AuthContext'
 import { access, canInviteTherapist } from '../auth/permissions'
 import { listTherapists } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
-import { Badge, Btn, Card, PageHeader, SearchBar, Table } from '../components/ui'
+import { Badge, Btn, Card, DataState, PageHeader, SearchBar, Table } from '../components/ui'
 import InviteUserForm from '../components/InviteUserForm'
 
 export default function Therapists() {
   const { role } = useAuth()
-  const { data: therapists = [] } = useAsync(listTherapists)
   const a = role ? access(role, 'therapists') : { level: 'denied' as const }
   const readOnly = a.level === 'read'
   const opsOnly = a.mask === 'ops' // admin: تشغيل — بدون قرارات الاعتماد السريرية؟ نقول: تعطيل/تعليق مسموح، اعتماد للمدير الرئيسي
   // المشرف السريري: الـAPI يسمح له بدعوة معالج فقط، بدون عرض القائمة
   const inviteOnly = a.mask === 'invite-only'
+  const canListTherapists = !inviteOnly && a.level !== 'denied'
+  const { data, loading, error, reload } = useAsync(
+    canListTherapists ? listTherapists : () => Promise.resolve([]),
+    [role, canListTherapists],
+  )
+  const therapists = data ?? []
   const canInvite = canInviteTherapist(role)
   const [inviting, setInviting] = useState(false)
   const [sent, setSent] = useState(false)
@@ -30,6 +35,7 @@ export default function Therapists() {
         <InviteUserForm roles={['therapist']} onCancel={() => setInviting(false)} onDone={() => { setInviting(false); setSent(true) }} />
       )}
       {!inviteOnly && <Card className="p-4">
+        <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && therapists.length === 0} onRetry={reload} />
         <SearchBar placeholder="ابحث بالاسم، رقم الترخيص..." />
         <div className="mt-4">
           <Table cols={['الرقم', 'الاسم', 'الحالة', 'المرضى', 'التقييم', 'تاريخ الانضمام', 'إجراءات']}>

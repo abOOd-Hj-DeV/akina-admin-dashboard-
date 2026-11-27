@@ -64,8 +64,16 @@ export default function Reports() {
   const { role } = useAuth()
   const a = role ? access(role, 'reports') : { level: 'denied' as const }
   const kind: Kind = role === 'super_admin' ? 'ops' : (a.mask as Kind) ?? 'ops'
-  const { data: overview } = useAsync(!API_MOCK && (kind === 'ops' || kind === 'clinical') ? getOverview : () => Promise.resolve(null))
-  const { data: withdrawals = [] } = useAsync(!API_MOCK && kind === 'earnings' ? listWithdrawals : () => Promise.resolve([]))
+  const overviewState = useAsync(
+    !API_MOCK && (kind === 'ops' || kind === 'clinical') ? getOverview : () => Promise.resolve(null),
+    [role, kind],
+  )
+  const withdrawalState = useAsync(
+    !API_MOCK && kind === 'earnings' ? listWithdrawals : () => Promise.resolve([]),
+    [role, kind],
+  )
+  const overview = overviewState.data
+  const withdrawals = withdrawalState.data ?? []
   const list = API_MOCK ? DEMO_REPORTS[kind] : liveReports(kind, overview ?? null, withdrawals)
   const full = a.level === 'full'
 
@@ -81,7 +89,12 @@ export default function Reports() {
       />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {list.map((r) => (
-          <StatCard key={r.label} {...r} />
+          <StatCard
+            key={r.label}
+            {...r}
+            loading={!API_MOCK && (kind === 'ops' || kind === 'clinical') ? overviewState.loading : !API_MOCK && withdrawalState.loading}
+            error={!API_MOCK ? (kind === 'ops' || kind === 'clinical' ? overviewState.error : withdrawalState.error) : null}
+          />
         ))}
       </div>
       <Card className="mt-6">

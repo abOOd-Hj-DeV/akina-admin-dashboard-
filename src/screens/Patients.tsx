@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
 import { listPatients, listTherapists } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
-import { Badge, Card, Chip, PageHeader, ProgressBar, SearchBar, Table } from '../components/ui'
+import { Badge, Card, Chip, DataState, DataValue, PageHeader, ProgressBar, SearchBar, Table } from '../components/ui'
 import Icon from '../components/Icon'
 
 const tName = (ts: { id: string; name: string }[], id: string) => ts.find((t) => t.id === id || t.name === id)?.name ?? (id.startsWith('د.') ? id : '—')
@@ -11,9 +11,16 @@ const statusTone = (s: string) => (s === 'نشط' ? 'green' : s === 'في خطر
 
 export default function Patients() {
   const { role } = useAuth()
-  const { data: patients = [] } = useAsync(listPatients)
-  const { data: therapists = [] } = useAsync(listTherapists)
   const a = role ? access(role, 'patients') : { level: 'denied' as const }
+  const therapistAccess = role ? access(role, 'therapists') : { level: 'denied' as const }
+  const canListTherapists = therapistAccess.level !== 'denied' && therapistAccess.mask !== 'invite-only'
+  const { data: patientData, loading, error, reload } = useAsync(listPatients)
+  const { data: therapistData, loading: therapistsLoading, error: therapistsError, reload: reloadTherapists } = useAsync(
+    canListTherapists ? listTherapists : () => Promise.resolve([]),
+    [role, canListTherapists],
+  )
+  const patients = patientData ?? []
+  const therapists = therapistData ?? []
   const hideClinical = a.mask === 'no-clinical' || a.mask === 'status-only'
   const anon = a.mask === 'no-identity'
   const statusOnly = a.mask === 'status-only'
@@ -32,14 +39,16 @@ export default function Patients() {
       />
       {!statusOnly && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <Chip icon={<Icon name="doc" size={14} />} label="بحاجة لتقرير" count={8} tone="blue" />
-          <Chip icon={<Icon name="warn" size={14} />} label="غير ملتزم" count={12} tone="amber" />
-          <Chip icon={<Icon name="alert" size={14} />} label="في خطر" count={3} tone="red" />
+          <Chip icon={<Icon name="doc" size={14} />} label="بحاجة لتقرير" count={<DataValue loading={loading} error={error} value={patients.filter(p => p.needsReport).length} />} tone="blue" />
+          <Chip icon={<Icon name="warn" size={14} />} label="غير ملتزم" count={<DataValue loading={loading} error={error} value={patients.filter(p => p.compliance < 50).length} />} tone="amber" />
+          <Chip icon={<Icon name="alert" size={14} />} label="في خطر" count={<DataValue loading={loading} error={error} value={patients.filter(p => p.status === 'في خطر').length} />} tone="red" />
         </div>
       )}
       <Card className="p-4">
         <SearchBar placeholder="ابحث بالاسم، رقم الملف، المعالج..." />
         <div className="mt-4">
+          <DataState loading={loading} error={error} hasData={patientData !== undefined} empty={patientData !== undefined && patients.length === 0} onRetry={reload} />
+          {canListTherapists && <DataState loading={therapistsLoading} error={therapistsError} hasData={therapistData !== undefined} onRetry={reloadTherapists} />}
           <Table cols={cols}>
             {patients.map((p) => (
               <tr key={p.id} className="border-b border-gray-50 last:border-0 hover:bg-[#f7f7f7]/60">

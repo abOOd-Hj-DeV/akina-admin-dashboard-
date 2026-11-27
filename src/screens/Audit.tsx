@@ -2,14 +2,15 @@ import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
 import { listAudit } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
-import { Badge, Banner, Btn, Card, PageHeader, Table } from '../components/ui'
+import { Badge, Banner, Btn, Card, DataState, PageHeader, Table } from '../components/ui'
 import Icon from '../components/Icon'
 
 /** سجل التدقيق: Super Admin كامل، Admin قراءة فقط */
 export default function Audit() {
   const { role } = useAuth()
   const a = role ? access(role, 'audit') : { level: 'denied' as const }
-  const { data: auditLog = [] } = useAsync(listAudit)
+  const { data, loading, error, reload } = useAsync(listAudit)
+  const auditLog = data ?? []
   const full = a.level === 'full'
 
   return (
@@ -17,6 +18,7 @@ export default function Audit() {
       <PageHeader title="سجل التدقيق — Audit Log" sub={!full ? 'قراءة فقط' : 'Super Admin — سجل شامل'} />
       <Banner tone="purple"><Icon name="lock" size={14} className="ms-1 inline" /> سجل شامل لجميع العمليات الحساسة — لا يمكن حذف أو تعديل السجلات</Banner>
       <Card className="p-4">
+        <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && auditLog.length === 0} onRetry={reload} />
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex gap-2 text-[12px]">
             <Badge tone="teal">كل الأحداث</Badge>

@@ -30,17 +30,54 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
   )
 }
 
-export function StatCard({ icon, label, value, sub }: { icon: ReactNode; label: string; value: ReactNode; sub?: ReactNode; tint?: string }) {
+export function StatCard({
+  icon, label, value, sub, loading = false, error = null,
+}: { icon: ReactNode; label: string; value: ReactNode; sub?: ReactNode; tint?: string; loading?: boolean; error?: Error | null }) {
   return (
     <Card className="flex min-h-[92px] items-center gap-5">
       <span className="featured-icon"><span>{icon}</span></span>
       <div className="min-w-0">
         <div className="text-[14px] font-normal leading-5 text-[#657381]">{label}</div>
-        <div className="truncate text-[24px] font-semibold leading-8 tracking-[-0.5px] text-[#0a0a0a]">{value}</div>
+        <div
+          className={`truncate text-[24px] font-semibold leading-8 tracking-[-0.5px] ${error ? 'text-red-600' : 'text-[#0a0a0a]'}`}
+          title={error ? 'تعذّر التحميل' : undefined}
+        >
+          {loading ? '…' : error ? '—' : value}
+        </div>
         {sub && <div className="text-[12px] font-normal text-[#657381]">{sub}</div>}
       </div>
     </Card>
   )
+}
+
+export function DataState({
+  loading, error, hasData, empty, emptyMessage = 'لا توجد بيانات.', onRetry,
+}: {
+  loading: boolean
+  error: Error | null
+  hasData: boolean
+  empty?: boolean
+  emptyMessage?: string
+  onRetry: () => void | Promise<void>
+}) {
+  if (loading) return <p role="status" className="py-4 text-[14px] text-[#657381]">جارٍ التحميل…</p>
+  if (error) {
+    return (
+      <div role="alert" className="my-3 flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700">
+        <span>تعذّر التحميل</span>
+        {hasData && <span>قد تكون البيانات غير محدّثة</span>}
+        <button type="button" className="font-semibold underline" onClick={() => void onRetry()}>إعادة المحاولة</button>
+      </div>
+    )
+  }
+  if (empty) return <p className="py-8 text-center text-[14px] text-[#657381]">{emptyMessage}</p>
+  return null
+}
+
+export function DataValue({ loading, error, value }: { loading: boolean; error: Error | null; value: ReactNode }) {
+  if (loading) return <>…</>
+  if (error) return <span className="text-red-600" title="تعذّر التحميل">—</span>
+  return <>{value}</>
 }
 
 const badgeTones: Record<string, string> = {
@@ -57,7 +94,7 @@ export function Badge({ children, tone = 'gray' }: { children: ReactNode; tone?:
   return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium ${badgeTones[tone]}`}>{children}</span>
 }
 
-export function Chip({ icon, label, count, tone }: { icon: ReactNode; label: string; count: number; tone: keyof typeof badgeTones }) {
+export function Chip({ icon, label, count, tone }: { icon: ReactNode; label: string; count: ReactNode; tone: keyof typeof badgeTones }) {
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium ${badgeTones[tone]}`}>
       {icon}

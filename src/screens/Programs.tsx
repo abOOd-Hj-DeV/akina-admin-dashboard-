@@ -2,13 +2,14 @@ import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
 import { listPrograms } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
-import { Badge, Btn, Card, PageHeader } from '../components/ui'
+import { Badge, Btn, Card, DataState, PageHeader } from '../components/ui'
 
 /** مكتبة البرامج: المشرف+الرئيسي كامل، Admin قراءة، مدير المحتوى = المحتوى غير العلاجي فقط */
 export default function Programs() {
   const { role } = useAuth()
   const a = role ? access(role, 'programs') : { level: 'denied' as const }
-  const { data: programs = [] } = useAsync(listPrograms)
+  const { data, loading, error, reload } = useAsync(listPrograms)
+  const programs = data ?? []
   const nonTher = a.mask === 'non-therapeutic'
   const readOnly = a.level === 'read'
   const list = nonTher ? programs.filter((p) => !p.therapeutic) : programs
@@ -32,6 +33,7 @@ export default function Programs() {
         </div>
       )}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && list.length === 0} onRetry={reload} />
         {list.map((p) => (
           <Card key={p.id}>
             <div className="flex items-start justify-between">

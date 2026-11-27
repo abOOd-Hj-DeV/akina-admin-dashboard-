@@ -7,7 +7,7 @@ import { adminApi } from '../api/admin'
 import type { ApiAdminUser } from '../api/types'
 import type { Role } from '../types'
 import { useAsync } from '../hooks/useAsync'
-import { Badge, Btn, Card, PageHeader, Table } from '../components/ui'
+import { Badge, Btn, Card, DataState, PageHeader, Table } from '../components/ui'
 import InviteUserForm from '../components/InviteUserForm'
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
@@ -27,7 +27,7 @@ export default function Users() {
   const canEdit = a.level === 'full' && staffRoles.length > 0
   const [page, setPage] = useState(1)
   const [revision, setRevision] = useState(0)
-  const { data, loading, error } = useAsync(
+  const { data, loading, error, reload: refresh } = useAsync(
     () => (API_MOCK ? Promise.resolve({ data: MOCK_USERS, last_page: 1 }) : adminApi.users({ page })),
     [page, revision],
   )
@@ -80,8 +80,7 @@ export default function Users() {
       {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}
       {notice && <p role="status">{notice}</p>}
       {working && <p role="status">جارٍ تحديث الدعوة…</p>}
-      {loading && <p role="status">جارٍ تحميل الحسابات…</p>}
-      {error && <p role="alert">تعذّر تحميل الحسابات.</p>}
+      <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && users.length === 0} onRetry={refresh} />
       {adding && (
         <InviteUserForm roles={staffRoles} onCancel={() => setAdding(false)} onDone={() => { setAdding(false); setPage(1); reload() }} />
       )}
