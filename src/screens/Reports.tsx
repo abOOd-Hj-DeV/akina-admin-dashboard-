@@ -31,7 +31,13 @@ const DEMO_REPORTS = {
 type Kind = 'ops' | 'clinical' | 'earnings'
 
 /** مؤشرات مشتقة من /admin/overview و /admin/withdrawals — لا أرقام مفبركة في الوضع الحي */
-function liveReports(kind: Kind, ov: ApiOverview | null, withdrawals: Withdrawal[]) {
+function liveReports(
+  kind: Kind,
+  ov: ApiOverview | null,
+  withdrawals: Withdrawal[],
+  withdrawalsLoading: boolean,
+  withdrawalsError: Error | null,
+) {
   if (kind === 'ops') {
     const compliancePct = ov && ov.patients.total > 0
       ? Math.round((100 * (ov.patients.by_compliance.high ?? 0)) / ov.patients.total) : null
@@ -53,10 +59,29 @@ function liveReports(kind: Kind, ov: ApiOverview | null, withdrawals: Withdrawal
   }
   const pending = withdrawals.filter((w) => w.status === 'pending')
   const sum = withdrawals.reduce((s, w) => s + w.amount, 0)
+  const displayWithdrawalValue = (value: string) =>
+    withdrawalsLoading ? '…' : withdrawalsError ? '—' : value
   return [
-    { icon: <Icon name="money" size={22} />, label: 'إجمالي السحوبات', value: `${sum.toLocaleString('en-US')} SR`, sub: `${withdrawals.length} عملية` },
-    { icon: <Icon name="receipt" size={22} />, label: 'سحوبات معلقة', value: String(pending.length), sub: `${pending.reduce((s, w) => s + w.amount, 0).toLocaleString('en-US')} SR` },
-    { icon: <Icon name="chart" size={22} />, label: 'متوسط السحب', value: withdrawals.length ? `${Math.round(sum / withdrawals.length).toLocaleString('en-US')} SR` : '—', sub: 'لكل عملية' },
+    {
+      icon: <Icon name="money" size={22} />,
+      label: 'إجمالي السحوبات',
+      value: displayWithdrawalValue(`${sum.toLocaleString('en-US')} SR`),
+      sub: displayWithdrawalValue(`${withdrawals.length} عملية`),
+    },
+    {
+      icon: <Icon name="receipt" size={22} />,
+      label: 'سحوبات معلقة',
+      value: displayWithdrawalValue(String(pending.length)),
+      sub: displayWithdrawalValue(`${pending.reduce((s, w) => s + w.amount, 0).toLocaleString('en-US')} SR`),
+    },
+    {
+      icon: <Icon name="chart" size={22} />,
+      label: 'متوسط السحب',
+      value: displayWithdrawalValue(withdrawals.length
+        ? `${Math.round(sum / withdrawals.length).toLocaleString('en-US')} SR`
+        : '—'),
+      sub: 'لكل عملية',
+    },
   ]
 }
 
@@ -74,7 +99,13 @@ export default function Reports() {
   )
   const overview = overviewState.data
   const withdrawals = withdrawalState.data ?? []
-  const list = API_MOCK ? DEMO_REPORTS[kind] : liveReports(kind, overview ?? null, withdrawals)
+  const list = API_MOCK ? DEMO_REPORTS[kind] : liveReports(
+    kind,
+    overview ?? null,
+    withdrawals,
+    withdrawalState.loading,
+    withdrawalState.error,
+  )
   const full = a.level === 'full'
 
   return (
