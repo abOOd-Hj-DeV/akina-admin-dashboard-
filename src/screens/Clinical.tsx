@@ -47,16 +47,6 @@ export default function Clinical() {
               <p className="mt-1 text-[14px] text-[#657381]">{f.reason}</p>
               <p className="mt-1 text-[12px] text-[#657381]">المعالج: {f.therapistName} · تم الرصد: {formatAdminDate(f.detectedAt)}</p>
             </div>
-            <div className="flex flex-col gap-2">
-              <Btn tone="ghost" className="px-3 py-1.5 text-[12px]">عرض السجل</Btn>
-              {full && f.level !== 'تم الحل' && (
-                <>
-                  <Btn tone="danger" className="px-3 py-1.5 text-[12px]">اتصال فوري</Btn>
-                  <Btn tone="blue" className="px-3 py-1.5 text-[12px]">إحالة لجلسة طارئة</Btn>
-                  <Btn tone="outline" className="px-3 py-1.5 text-[12px]">تعيين خطة متابعة</Btn>
-                </>
-              )}
-            </div>
           </Card>
         ))}
       </div>
