@@ -57,6 +57,7 @@ export const mapFlag = (f: ApiRedFlag): RedFlag => ({
   patientName: f.patient_name || 'مريض',
   patientWhatsapp: f.patient_whatsapp ?? null,
   type: f.type,
+  source: f.source,
   priority: f.priority,
   status: f.status === 'resolved' ? 'resolved' : f.status === 'assigned' ? 'assigned' : 'open',
   assignedTo: f.assigned_to,

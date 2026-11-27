@@ -103,6 +103,7 @@ export const redFlags: RedFlag[] = [
     patientName: 'محمد ي.',
     patientWhatsapp: '+963944123456',
     type: 'safety',
+    source: 'assessment',
     priority: 'high',
     status: 'open',
     assignedTo: 'staff-1',

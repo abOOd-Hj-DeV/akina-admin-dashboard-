@@ -6,6 +6,7 @@ import { API_MOCK } from '../api/client'
 import { Badge, Banner, Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 import { formatAdminDate } from '../lib/format-date'
+import { redFlagLabel } from '../lib/red-flag-label'
 
 /** الإشراف الإكلينيكي: المشرف كامل، المدير الرئيسي قراءة فقط */
 export default function Clinical() {
@@ -44,7 +45,10 @@ export default function Clinical() {
                   {f.level}
                 </Badge>
               </div>
-              <p className="mt-1 text-[14px] text-[#657381]">{f.reason}</p>
+              <p className="mt-1 text-[14px] text-[#657381]">
+                <strong>{redFlagLabel(f.type, f.source)}</strong>
+                {f.reason && <> · {f.reason}</>}
+              </p>
               <p className="mt-1 text-[12px] text-[#657381]">المعالج: {f.therapistName} · تم الرصد: {formatAdminDate(f.detectedAt)}</p>
             </div>
           </Card>

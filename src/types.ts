@@ -54,6 +54,7 @@ export interface RedFlag {
   patientName: string
   patientWhatsapp?: string | null
   type: string
+  source?: string | null
   priority: 'high' | 'medium' | 'low'
   status: 'open' | 'assigned' | 'resolved'
   assignedTo?: string | null

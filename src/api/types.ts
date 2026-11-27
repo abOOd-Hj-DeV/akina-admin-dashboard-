@@ -94,6 +94,7 @@ export interface ApiRedFlag {
   patient_name?: string | null
   patient_whatsapp?: string | null
   type: string
+  source?: string | null
   priority: 'high' | 'medium' | 'low'
   status: 'open' | 'assigned' | 'resolved' | string
   description: string

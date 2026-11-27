@@ -6,13 +6,8 @@ import { useAsync } from '../hooks/useAsync'
 import { Badge, Banner, Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
 import { formatAdminDate, localizeAdminTimestamps } from '../lib/format-date'
+import { redFlagLabel } from '../lib/red-flag-label'
 import type { RedFlag } from '../types'
-
-const FLAG_LABELS: Record<string, string> = {
-  safety: 'أفكار لإيذاء النفس',
-  low_mood: 'درجة اكتئاب أو قلق مرتفعة',
-  non_compliance: 'عدم التزام بالخطة العلاجية',
-}
 
 const PRIORITY_LABELS = {
   high: 'عالية',
@@ -112,7 +107,7 @@ export function RedFlagCard({
             )}
           </div>
           <p className="mt-2 text-[14px] text-[#657381]">
-            <span className="font-bold">{FLAG_LABELS[flag.type] ?? 'تنبيه سريري'}</span>
+            <span className="font-bold">{redFlagLabel(flag.type, flag.source)}</span>
             {flag.reason && <span> · {flag.reason}</span>}
             {flag.assessmentScore !== null && <span> · الدرجة: {flag.assessmentScore}</span>}
           </p>

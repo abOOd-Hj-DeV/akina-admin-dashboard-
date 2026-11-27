@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/client'
 import { applyRedFlagDecision, redFlags } from '../data/mock'
 import { RedFlagCard, RedFlagDecisionForm } from './RedFlags'
+import { mapFlag } from '../services/data'
+import type { ApiRedFlag } from '../api/types'
 import type { RedFlag } from '../types'
 
 const heldFlag: RedFlag = {
@@ -11,6 +13,7 @@ const heldFlag: RedFlag = {
   patientName: 'مريم الاختبار',
   patientWhatsapp: '+963944123456',
   type: 'safety',
+  source: 'assessment',
   priority: 'high',
   status: 'open',
   assignedTo: 'assignee-id',
@@ -27,6 +30,21 @@ const heldFlag: RedFlag = {
 }
 
 describe('واجهة حالات الخطر', () => {
+  it.each([
+    ['manual_support', 'طلب دعم عاجل من التطبيق'],
+    ['assessment', 'إشارة سلامة من تقييم'],
+    [undefined, 'بلاغ سلامة يحتاج إلى مراجعة'],
+    ['future_source', 'بلاغ سلامة يحتاج إلى مراجعة'],
+  ])('labels safety flags from the source contract (%s), not the type', (source, label) => {
+    const flag = mapFlag({
+      id: 'test', patient_id: 'test-patient', type: 'safety', source,
+      priority: 'high', status: 'open', description: 'تفاصيل للمراجعة',
+    } as ApiRedFlag)
+    const markup = renderToStaticMarkup(<RedFlagCard flag={flag} full onDecision={vi.fn()} />)
+    expect(markup).toContain(label)
+    expect(markup).not.toContain('أفكار لإيذاء النفس')
+  })
+
   it('يعرض بطاقة التعليق وطلب إعادة التفعيل دون معرّفات المريض', () => {
     const markup = renderToStaticMarkup(
       <RedFlagCard flag={heldFlag} full onDecision={vi.fn(async () => undefined)} />,
