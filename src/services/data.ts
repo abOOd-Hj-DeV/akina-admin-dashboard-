@@ -5,15 +5,15 @@
  *   غير ذلك (الوضع الحالي)                    → بيانات mock من ../data/mock
  * عند الربط: لا تغيير في الشاشات — فقط تفعّل المتغيرات.
  */
-import { API_MOCK, ApiError } from '../api/client'
+import { API_MOCK, api, ApiError } from '../api/client'
 import { adminApi } from '../api/admin'
 import type {
   ApiAdminPatient, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAuditEntry, ApiDocument,
   ApiFaq, ApiOverview, ApiPayment, ApiProgram, ApiRedFlag, ApiSupportTicket, ApiWithdrawal,
-  CreateUserBody,
+  CreateUserBody, TherapistActionCode,
 } from '../api/types'
 import type {
-  AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Ticket,
+  AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Role, Ticket,
 } from '../types'
 import * as mock from '../data/mock'
 import { THERAPIST_OPTIONS } from '../data/therapistOptions'
@@ -71,19 +71,31 @@ export const mapFlag = (f: ApiRedFlag): RedFlag => ({
   detectedAt: f.created_at,
 })
 
-const DOC_STATUS = { requested: 'قيد المراجعة', submitted: 'قيد المراجعة', pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض' } as const
 export const DOCUMENT_TYPES = {
   license: 'رخصة مزاولة', identity: 'إثبات هوية', certificate: 'شهادة',
   payment_proof: 'إثبات دفع', support_file: 'ملف داعم', other: 'مستند آخر',
 } as const
 const DOC_TYPE: Record<string, string> = { ...DOCUMENT_TYPES, id: DOCUMENT_TYPES.identity }
+const documentDownloadPath = (url: string | null | undefined) => {
+  if (!url) return undefined
+  try {
+    const { pathname } = new URL(url, 'https://sakina.invalid')
+    if (/^\/api\/v1\/files\/download\/uploads\/[\da-f-]{36}\/document_requests\/[\w.-]+$/i.test(pathname)) return pathname
+  } catch { return undefined }
+}
 const mapDoc = (d: ApiDocument): DocRequest => ({
   id: d.id,
   subject: DOC_TYPE[d.doc_type] ?? d.doc_type ?? 'مستند',
-  reason: d.reason ?? d.review_note ?? '',
-  requestedBy: d.user_name ?? d.requested_by_name ?? '—',
+  reason: d.reason ?? '',
+  requestedBy: d.requested_by_name ?? '—',
+  recipient: d.user_name ?? undefined,
   date: d.requested_at,
-  status: DOC_STATUS[d.status as keyof typeof DOC_STATUS] ?? 'قيد المراجعة',
+  status: d.status === 'requested' || d.status === 'submitted' || d.status === 'approved' || d.status === 'rejected'
+    ? d.status : 'unknown',
+  downloadPath: d.has_file ? documentDownloadPath(d.download_url) : undefined,
+  hasFile: d.has_file,
+  filename: d.original_name ?? undefined,
+  reviewNote: d.review_note ?? undefined,
 })
 
 const TICKET_STATUS = { open: 'مفتوحة', in_progress: 'قيد المعالجة', resolved: 'مغلقة', closed: 'مغلقة' } as const
@@ -111,7 +123,9 @@ const mapAudit = (a: ApiAuditEntry): AuditEntry => ({
   userRole: a.actor?.role ?? 'System',
   action: a.action,
   target: a.entity_id ?? '—',
-  details: auditDetails(a.details),
+  details: a.action === 'file.downloaded' && typeof a.details === 'object' && a.details !== null && 'path' in a.details
+    ? auditDetails(Object.fromEntries(Object.entries(a.details).filter(([key]) => key !== 'path')))
+    : auditDetails(a.details),
   ip: '—',
 })
 
@@ -169,31 +183,49 @@ const fetchTicketPages = async (): Promise<ApiSupportTicket[]> => {
 export const listPatients = (f?: Parameters<typeof adminApi.patients>[0]) =>
   API_MOCK ? wait(mock.patients) : fetchPages(page => adminApi.patients({ ...f, page })).then(rows => rows.map(mapPatient))
 
-export async function listTherapists(f: Parameters<typeof adminApi.therapists>[0]) {
+export async function listTherapists(f: Parameters<typeof adminApi.therapists>[0], mockRole?: Role | null) {
   if (!API_MOCK) return adminApi.therapists(f)
-  const { status, q, page, per_page = 15 } = f
+  const { lifecycle_state, q, page, per_page = 15 } = f
   const query = q?.trim().toLowerCase()
   const rows = mock.therapists.filter(t => {
-    const matchesStatus = status === 'changes_pending'
-      ? t.approval_status === 'approved' && t.pending_revision?.kind === 'update'
-      : status === 'all' || (t.approval_status ?? 'not_submitted') === status
+    const matchesStatus = !lifecycle_state || t.lifecycle_state === lifecycle_state
     return matchesStatus && (!query || t.application_ref?.toLowerCase() === query
       || t.full_name.toLowerCase().includes(query) || t.whatsapp_number?.includes(query))
   })
   const data = rows.slice((page - 1) * per_page, page * per_page)
-    .map(({ published: _published, last_review: _lastReview, pending_revision: revision, ...row }): ApiAdminTherapist => ({
+    .map(({ published: _published, last_review: _lastReview, last_rejected_revision: _rejected, pending_revision: revision, ...row }): ApiAdminTherapist => ({
       ...row,
       pending_revision: revision ? { id: revision.id, kind: revision.kind, submitted_at: revision.submitted_at } : null,
     }))
   return {
     data,
+    meta: { can_invite: mockRole === 'super_admin' || mockRole === 'clinical_supervisor' },
     pagination: { current_page: page, last_page: Math.max(1, Math.ceil(rows.length / per_page)), total: rows.length },
   }
 }
 
+const listTherapistDirectory = () =>
+  API_MOCK ? wait(mock.therapists) : fetchPages(page => listTherapists({ page }))
+
 export const listTherapistNames = () =>
-  (API_MOCK ? wait(mock.therapists) : fetchPages(page => listTherapists({ status: 'all', page })))
+  listTherapistDirectory()
     .then(rows => rows.map(({ id, full_name }) => ({ id, name: full_name })))
+
+export async function listDocumentRecipients() {
+  const rows = await listTherapistDirectory()
+  const used = new Set<string>()
+  return rows.map(({ id, full_name, application_ref, whatsapp_number }) => {
+    const reference = application_ref?.trim()
+    const digits = whatsapp_number?.replace(/\D/g, '') ?? ''
+    const base = reference ? `${full_name} — رقم الطلب: ${reference}`
+      : digits.length >= 4 ? `${full_name} — واتساب: ••••${digits.slice(-4)}`
+      : full_name
+    let label = base
+    for (let index = 2; used.has(label); index++) label = `${base} (${index})`
+    used.add(label)
+    return { id, label }
+  })
+}
 
 function getMockTherapist(id: string): ApiAdminTherapistDetail {
   const row = mock.therapists.find(t => t.id === id)
@@ -210,13 +242,6 @@ export async function getTherapistOptions() {
     catch { return THERAPIST_OPTIONS }
   }
   return THERAPIST_OPTIONS
-}
-
-export async function getTherapistLicense(id: string) {
-  if (!API_MOCK) return adminApi.therapistLicense(id)
-  if (!getMockTherapist(id).has_license) throw new ApiError(404, 'الرخصة غير متاحة.')
-  const png = 'iVBORw0KGgoAAAANSUhEUgAAAFAAAAAkAQAAAAA22YDXAAAAQklEQVR42mNgQID6/1DwjwkhODiY/+W5LihARS98+H8ByuRg+M8BU8v4AK5NAWHCAzjzB8PBH1CmgSCjwWDxMRIAAEZPHuV69ABjAAAAAElFTkSuQmCC'
-  return new Blob([Uint8Array.from(atob(png), c => c.charCodeAt(0))], { type: 'image/png' })
 }
 
 export const listPayments = () =>
@@ -298,33 +323,47 @@ export async function decideTherapist(id: string, revision_id: string, action: '
   if (revision?.id !== revision_id) throw new ApiError(404, '')
   if (revision.status === 'superseded') throw new ApiError(409, '', undefined, 'revision_superseded')
   if (revision.status !== 'pending') throw new ApiError(409, '', undefined, 'already_decided')
+  requireMockAction(row, action)
   const approved = action === 'approve'
   const published = approved ? revision.data : row.published
   if (approved && published.email && mock.therapists.some(t => t.id !== id && t.email?.toLowerCase() === published.email?.toLowerCase())) {
     throw new ApiError(422, '', { email: ['البريد الإلكتروني مستخدم.'] })
   }
   const status = approved ? 'approved' : 'rejected'
+  const lifecycle = approved || revision.kind === 'update' ? 'approved' : 'needs_changes'
+  const reviewed_at = new Date().toISOString()
   mock.therapists[mock.therapists.indexOf(row)] = {
     ...row, ...published, published, full_name: published.full_name ?? row.full_name, pending_revision: null,
     approval_status: revision.kind === 'initial' ? status : row.approval_status,
     approval_note: revision.kind === 'initial' ? (approved ? null : note) : row.approval_note,
-    last_review: { revision_id, kind: revision.kind, status, note: note || null, reviewed_at: new Date().toISOString() },
+    lifecycle_state: lifecycle, allowed_actions: mock.mockLifecycleActions[lifecycle],
+    last_review: { revision_id, kind: revision.kind, status, note: note || null, reviewed_at },
+    last_rejected_revision: approved ? row.last_rejected_revision : { ...revision, status, review_note: note, reviewed_at },
   }
 }
 
 export async function setTherapistActive(id: string, active: boolean) {
   if (!API_MOCK) return adminApi.setUserActive(id, active)
   const row = getMockTherapist(id)
-  mock.therapists[mock.therapists.indexOf(row)] = { ...row, is_active: active }
+  requireMockAction(row, active ? 'reactivate' : 'suspend')
+  const lifecycle = !active ? 'suspended' : row.pending_revision
+    ? row.pending_revision.kind === 'update' ? 'update_pending' : 'pending_review'
+    : row.approval_status === 'approved' ? 'approved'
+      : row.approval_status === 'rejected' ? 'needs_changes' : 'awaiting_profile'
+  mock.therapists[mock.therapists.indexOf(row)] = {
+    ...row, is_active: active, lifecycle_state: lifecycle, allowed_actions: mock.mockLifecycleActions[lifecycle],
+  }
 }
 
-export async function requestTherapistDocument(body: Parameters<typeof adminApi.requestDocument>[0]) {
-  if (!API_MOCK) return adminApi.requestDocument(body)
-  const row = getMockTherapist(body.user_id)
-  mock.docRequests.unshift({
-    id: crypto.randomUUID(), subject: DOCUMENT_TYPES[body.doc_type], reason: body.reason ?? '',
-    requestedBy: row.full_name, date: new Date().toISOString(), status: 'قيد المراجعة',
-  })
+function requireMockAction(row: ApiAdminTherapist, action: TherapistActionCode) {
+  if (!row.allowed_actions?.includes(action)) throw new ApiError(409, '', undefined, 'action_not_allowed')
+}
+
+export async function manageTherapistInvitation(id: string, action: 'resend_invite' | 'cancel_invite') {
+  if (!API_MOCK) return action === 'resend_invite' ? adminApi.resendInvitation(id) : adminApi.cancelInvitation(id)
+  const row = getMockTherapist(id)
+  requireMockAction(row, action)
+  if (action === 'cancel_invite') mock.therapists.splice(mock.therapists.indexOf(row), 1)
 }
 
 export async function inviteUser(body: CreateUserBody) {
@@ -336,13 +375,38 @@ export async function inviteUser(body: CreateUserBody) {
     }
     mock.therapists.unshift(mock.mockTherapist({
       id: crypto.randomUUID(), full_name: body.name, approval_status: null, created_at: new Date().toISOString(),
-      whatsapp_number: body.whatsapp_number, application_ref, is_active: false, availability: [],
+      whatsapp_number: body.whatsapp_number, application_ref, lifecycle_state: 'invited', is_active: false, availability: [],
     }))
   }
 }
 
-export const reviewDocument = (id: string, action: 'approve' | 'reject', note?: string) =>
-  API_MOCK ? wait(undefined) : adminApi.reviewDocument(id, action, note)
+export async function requestDocument(userId: string, type: keyof typeof DOCUMENT_TYPES, reason?: string) {
+  if (!API_MOCK) return void await adminApi.requestDocument(userId, type, reason)
+  const therapist = getMockTherapist(userId)
+  mock.docRequests.unshift({
+    id: crypto.randomUUID(), subject: DOCUMENT_TYPES[type], reason: reason ?? '', requestedBy: 'عرض تجريبي', recipient: therapist.full_name,
+    date: new Date().toISOString(), status: 'requested',
+  })
+}
+
+export async function reviewDocument(id: string, action: 'approve' | 'reject', note?: string) {
+  if (!API_MOCK) return void await adminApi.reviewDocument(id, action, note)
+  const row = mock.docRequests.find(d => d.id === id)
+  if (!row || row.status !== 'submitted') throw new ApiError(409, 'الطلب ليس بانتظار المراجعة.')
+  row.status = action === 'approve' ? 'approved' : 'rejected'
+  row.reviewNote = note
+}
+
+export async function downloadDocument(doc: DocRequest) {
+  if (!doc.downloadPath) return
+  const blob = await api.getBlob(doc.downloadPath)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = doc.filename ?? 'مستند'
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
 
 export const setTicketStatus = (id: string, status: string) =>
   API_MOCK ? wait(undefined) : adminApi.setTicketStatus(id, status)

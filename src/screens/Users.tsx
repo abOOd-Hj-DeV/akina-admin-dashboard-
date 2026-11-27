@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { access, INVITABLE_STAFF_ROLES, ROLE_LABELS } from '../auth/permissions'
 import { API_MOCK } from '../api/client'
@@ -9,6 +10,7 @@ import type { Role } from '../types'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, DataState, PageHeader, Table } from '../components/ui'
 import InviteUserForm from '../components/InviteUserForm'
+import { formatAdminDate } from '../lib/format-date'
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
 
@@ -38,7 +40,7 @@ export default function Users() {
   const [working, setWorking] = useState(false)
   const [adding, setAdding] = useState(false)
 
-  const canManage = (u: ApiAdminUser) => canEdit && (
+  const canManage = (u: ApiAdminUser) => u.role !== 'therapist' && canEdit && (
     role === 'super_admin' || (role === 'admin' && u.role !== 'super_admin' && u.role !== 'admin')
   )
 
@@ -92,9 +94,16 @@ export default function Users() {
               <td className="px-3 py-3 text-[#0a0a0a]" dir="ltr">{u.whatsapp_number || '—'}</td>
               <td className="px-3 py-3 text-[#657381]" dir="ltr">{u.email ?? '—'}</td>
               <td className="px-3 py-3"><Badge tone="purple">{u.role in ROLE_LABELS ? ROLE_LABELS[u.role as Role] : u.role}</Badge></td>
-              <td className="px-3 py-3"><Badge tone={u.is_active ? 'green' : 'gray'}>{u.pending_invitation ? 'دعوة معلّقة' : u.is_active ? 'نشط' : 'معطّل'}</Badge></td>
-              <td className="px-3 py-3 text-[12px] text-[#657381]">{u.created_at?.slice(0, 10)}</td>
+              <td className="px-3 py-3">{u.role === 'therapist'
+                ? <span className="text-muted">تُعرض في إدارة المعالجين</span>
+                : <Badge tone={u.is_active ? 'green' : 'gray'}>{u.pending_invitation ? 'دعوة معلّقة' : u.is_active ? 'نشط' : 'معطّل'}</Badge>}</td>
+              <td className="px-3 py-3 text-[12px] text-[#657381]">{formatAdminDate(u.created_at)}</td>
               <td className="px-3 py-3">
+                {u.role === 'therapist' && role && access(role, 'therapists').level !== 'denied' && (
+                  <Link to={`/therapists?${new URLSearchParams({ therapist: u.id })}`} className="soft-button">
+                    عرض ملف المعالج
+                  </Link>
+                )}
                 {canManage(u) && (
                   <div className="flex gap-1.5">
                     {u.pending_invitation ? (

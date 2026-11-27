@@ -5,7 +5,7 @@ import type {
   ApiAdminPatient, ApiAdminPatientDetail, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAdminUser,
   ApiAuditEntry, ApiDocument, ApiFaq, ApiOverview, ApiPayment,
   ApiProgram, ApiRedFlag, ApiRedFlagCounts, ApiRedFlagStats, ApiSupportTicket, ApiWithdrawal, CreateUserBody,
-  DocumentType, TherapistFilter, TherapistOptions,
+  TherapistLifecycle, TherapistOptions,
 } from './types'
 
 const qs = (params: Record<string, string | number | boolean | undefined>) => {
@@ -25,10 +25,9 @@ export const adminApi = {
     api.get<Page<ApiAdminPatient>>(`/api/v1/admin/patients${qs(f)}`),
   patient: (id: string) => api.get<{ data: ApiAdminPatientDetail }>(`/api/v1/admin/patients/${id}`),
 
-  therapists: (f: { status: TherapistFilter; q?: string; page: number; per_page?: number }) =>
-    api.get<Required<Page<ApiAdminTherapist>>>(`/api/v1/admin/therapists${qs(f)}`),
+  therapists: (f: { lifecycle_state?: TherapistLifecycle; q?: string; page: number; per_page?: number }) =>
+    api.get<Required<Page<ApiAdminTherapist>> & { meta?: { can_invite?: boolean } }>(`/api/v1/admin/therapists${qs(f)}`),
   therapist: (id: string) => api.get<{ data: ApiAdminTherapistDetail }>(`/api/v1/admin/therapists/${id}`),
-  therapistLicense: (id: string) => api.getBlob(`/api/v1/admin/therapists/${id}/license`),
   therapistOptions: () => api.get<{ data: TherapistOptions }>('/api/v1/meta/therapist-options'),
   approveTherapist: (id: string, body: { revision_id: string; note?: string }) =>
     api.post(`/api/v1/admin/therapists/${id}/approve`, body, false),
@@ -69,8 +68,8 @@ export const adminApi = {
   // طلبات الملفات — admin, super_admin فقط
   documents: (page?: number) => api.get<Page<ApiDocument>>(`/api/v1/admin/documents${qs({ page })}`),
   document: (id: string) => api.get<{ data: ApiDocument }>(`/api/v1/admin/documents/${id}`),
-  requestDocument: (body: { user_id: string; doc_type: DocumentType; reason?: string }) =>
-    api.post<{ data: ApiDocument }>('/api/v1/admin/documents', body),
+  requestDocument: (user_id: string, doc_type: string, reason?: string) =>
+    api.post<{ data: ApiDocument }>('/api/v1/admin/documents', { user_id, doc_type, reason }),
   reviewDocument: (id: string, action: 'approve' | 'reject', note?: string) =>
     api.post(`/api/v1/admin/documents/${id}/review`, { action, note }),
 

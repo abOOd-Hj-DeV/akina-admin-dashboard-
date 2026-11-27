@@ -1,5 +1,5 @@
 import type { AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Ticket } from '../types'
-import type { ApiAdminTherapistDetail, TherapistProfile } from '../api/types'
+import type { ApiAdminTherapistDetail, TherapistActionCode, TherapistLifecycle, TherapistProfile } from '../api/types'
 import { ApiError } from '../api/client'
 
 export const patients: Patient[] = [
@@ -13,7 +13,18 @@ export const patients: Patient[] = [
   { id: 'P-1044', name: 'يوسف ن.', therapistId: 'T-089', status: 'نشط', subscription: 'باقة 8 أسابيع', progress: 88, compliance: 95, lastActivity: 'منذ ساعتين' },
 ]
 
-type MockTherapist = Pick<ApiAdminTherapistDetail, 'id' | 'full_name' | 'approval_status' | 'created_at'> & Partial<ApiAdminTherapistDetail>
+export const mockLifecycleActions: Record<TherapistLifecycle, TherapistActionCode[]> = {
+  invited: ['resend_invite', 'cancel_invite'],
+  awaiting_profile: ['suspend'],
+  pending_review: ['approve', 'reject', 'suspend'],
+  needs_changes: ['suspend'],
+  approved: ['suspend'],
+  update_pending: ['approve', 'reject', 'suspend'],
+  suspended: ['reactivate'],
+}
+
+type MockTherapist = Pick<ApiAdminTherapistDetail, 'id' | 'full_name' | 'approval_status' | 'created_at'> &
+  Partial<ApiAdminTherapistDetail> & { lifecycle_state: TherapistLifecycle }
 
 export function mockTherapist(row: MockTherapist): ApiAdminTherapistDetail {
   const approved = row.approval_status === 'approved'
@@ -26,10 +37,12 @@ export function mockTherapist(row: MockTherapist): ApiAdminTherapistDetail {
   }
   return {
     ...published,
-    has_license: approved, rating: null, can_accept_new_clients: true,
+    rating: null, review_count: 0, can_accept_new_clients: true,
     availability: { monday: ['09:00-12:00'] }, clients_count: 0, clients_limit: 20, is_active: true,
     whatsapp_number: null, application_ref: null, approval_note: null, submitted_at: null,
-    pending_revision: null, last_review: null,
+    pending_revision: null, last_review: null, last_rejected_revision: null,
+    activated: row.lifecycle_state !== 'invited',
+    allowed_actions: mockLifecycleActions[row.lifecycle_state],
     ...row,
     published,
   }
@@ -41,7 +54,7 @@ const initialProfile: TherapistProfile = {
   bio: 'أعمل على دعم البالغين وتطوير مهارات التعامل مع القلق.',
 }
 const updateDemo = mockTherapist({
-  id: 'T-042', full_name: 'د. سارة أحمد', approval_status: 'approved', clients_count: 18, rating: 4.9,
+  id: 'T-042', full_name: 'د. سارة أحمد', lifecycle_state: 'update_pending', approval_status: 'approved', clients_count: 18, rating: 4.9, review_count: 18,
   application_ref: 'APP-1001', created_at: '2024-03-15T09:00:00Z',
 })
 updateDemo.pending_revision = {
@@ -52,18 +65,27 @@ updateDemo.pending_revision = {
 
 export const therapists = [
   updateDemo,
-  mockTherapist({ id: 'T-089', full_name: 'د. محمد الخالدي', approval_status: 'approved', clients_count: 15, rating: 4.8, created_at: '2024-06-20T09:00:00Z' }),
+  mockTherapist({ id: 'T-089', full_name: 'د. محمد الخالدي', lifecycle_state: 'approved', approval_status: 'approved', clients_count: 15, rating: 4.8, review_count: 15, created_at: '2024-06-20T09:00:00Z' }),
   mockTherapist({
-    id: 'T-124', full_name: 'د. نور حسن', approval_status: 'pending', created_at: '2025-11-16T09:00:00Z',
-    application_ref: 'APP-1002', whatsapp_number: '+963983321260', submitted_at: '2025-11-22T09:00:00Z',
+    id: 'T-124', full_name: 'د. نور حسن', lifecycle_state: 'pending_review', approval_status: 'pending', created_at: '2025-11-16T09:00:00Z',
+    application_ref: 'APP-1002', whatsapp_number: '+12025550101', submitted_at: '2025-11-22T09:00:00Z',
     pending_revision: {
       id: '9e1a8253-057a-4bdb-9c31-3c2eb1f64a0b', kind: 'initial', status: 'pending',
       submitted_at: '2025-11-22T09:00:00Z', data: initialProfile,
     },
   }),
-  mockTherapist({ id: 'T-097', full_name: 'د. ليلى منصور', approval_status: 'approved', clients_count: 12, rating: 4.7, is_active: false, created_at: '2024-09-02T09:00:00Z' }),
-  mockTherapist({ id: 'T-133', full_name: 'د. هشام فؤاد', approval_status: 'rejected', approval_note: 'تفاصيل الملف لا تطابق طلب التقديم.', created_at: '2024-12-11T09:00:00Z' }),
-  mockTherapist({ id: 'T-134', full_name: 'د. ريم محمود', approval_status: null, created_at: '2025-11-19T09:00:00Z' }),
+  mockTherapist({ id: 'T-097', full_name: 'د. ليلى منصور', lifecycle_state: 'suspended', approval_status: 'approved', clients_count: 12, rating: 4.7, review_count: 12, is_active: false, created_at: '2024-09-02T09:00:00Z' }),
+  mockTherapist({
+    id: 'T-133', full_name: 'د. هشام فؤاد', lifecycle_state: 'needs_changes', approval_status: 'rejected',
+    approval_note: 'تفاصيل الملف لا تطابق طلب التقديم.', created_at: '2024-12-11T09:00:00Z',
+    last_rejected_revision: {
+      id: 'rejected-initial', kind: 'initial', status: 'rejected', submitted_at: '2024-12-12T09:00:00Z',
+      reviewed_at: '2024-12-13T09:00:00Z', review_note: 'تفاصيل الملف لا تطابق طلب التقديم.',
+      data: { ...initialProfile, full_name: 'د. هشام فؤاد', email: 'therapist-rejected@example.test' },
+    },
+  }),
+  mockTherapist({ id: 'T-134', full_name: 'د. ريم محمود', lifecycle_state: 'awaiting_profile', approval_status: null, created_at: '2025-11-19T09:00:00Z' }),
+  mockTherapist({ id: 'T-135', full_name: 'د. مريم علي', lifecycle_state: 'invited', approval_status: null, is_active: false, application_ref: 'APP-1003', created_at: '2025-11-23T09:00:00Z' }),
 ]
 
 export const payments: Payment[] = [
@@ -171,10 +193,10 @@ export const auditLog: AuditEntry[] = [
 ]
 
 export const docRequests: DocRequest[] = [
-  { id: 'DR-021', subject: 'مشاركة ملف المريض P-1156 مع جهة إحالة خارجية', reason: 'إحالة طبية عاجلة — تقرير الحالة مطلوب', requestedBy: 'د. نور حسن', date: '2025-11-18', status: 'قيد المراجعة' },
-  { id: 'DR-019', subject: 'طلب تغيير معالج للمريضة فاطمة ع.', reason: 'طلب المريضة — عدم توافق أسلوب العلاج', requestedBy: 'Support', date: '2025-11-17', status: 'قيد المراجعة' },
-  { id: 'DR-014', subject: 'مستند هوية للمعالج T-124', reason: 'استكمال اعتماد الترخيص المهني', requestedBy: 'Compliance', date: '2025-11-16', status: 'مقبول' },
-  { id: 'DR-011', subject: 'تقرير تقدم شهري للمريض P-1044', reason: 'طلب ولي الأمر', requestedBy: 'Support', date: '2025-11-15', status: 'مرفوض' },
+  { id: 'DR-021', subject: 'شهادة', reason: 'توثيق مؤهل إضافي', requestedBy: 'عرض تجريبي', date: '2025-11-18', status: 'requested' },
+  { id: 'DR-019', subject: 'ملف داعم', reason: 'استكمال طلب سابق', requestedBy: 'عرض تجريبي', date: '2025-11-17', status: 'submitted', hasFile: true },
+  { id: 'DR-014', subject: 'إثبات هوية', reason: 'التحقق من البيانات', requestedBy: 'عرض تجريبي', date: '2025-11-16', status: 'approved' },
+  { id: 'DR-011', subject: 'شهادة', reason: 'توثيق مؤهل إضافي', requestedBy: 'عرض تجريبي', date: '2025-11-15', status: 'rejected' },
 ]
 
 export const tickets: Ticket[] = [

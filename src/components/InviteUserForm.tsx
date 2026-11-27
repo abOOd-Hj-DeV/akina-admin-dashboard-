@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { CountryCode } from 'libphonenumber-js/min'
+import { ApiError } from '../api/client'
 import { describeAuthError } from '../api/errors'
 import type { ApiRole } from '../api/types'
 import { ROLE_LABELS } from '../auth/permissions'
@@ -15,8 +16,9 @@ const box = 'w-full rounded-xl border px-4 py-2.5 text-[14px] outline-none focus
 const tone = (bad?: string) => (bad ? 'border-[#fd4438]' : 'border-[#ebebeb]')
 
 /** نموذج دعوة عبر واتساب — يُستخدم لفريق الإدارة (Users) وللمعالجين (Therapists) */
-export default function InviteUserForm({ roles, onDone, onCancel }: {
+export default function InviteUserForm({ roles, disabled = false, onDone, onCancel }: {
   roles: ApiRole[]
+  disabled?: boolean
   onDone: () => void
   onCancel: () => void
 }) {
@@ -31,7 +33,7 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
   const isTherapist = role === 'therapist'
 
   const submit = async () => {
-    if (busy) return
+    if (busy || disabled) return
     reset()
     const { body, errors: local } = buildInvite({ name, email, whatsapp: wa, country, role, applicationRef })
     if (!body) { replace(local); return }
@@ -40,6 +42,10 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
       await inviteUser(body)
       onDone()
     } catch (e) {
+      if (e instanceof ApiError && e.status === 503 && e.code === 'whatsapp_check_unavailable') {
+        replace({ form: 'خدمة التحقق من رقم واتساب غير متاحة مؤقتًا. حاول إرسال الدعوة مرة أخرى بعد قليل.' })
+        return
+      }
       const d = describeAuthError(e, 'تعذّر إرسال الدعوة.')
       replace(mapInviteErrors(d.fieldErrors ?? {}, d.message))
     } finally {
@@ -90,7 +96,7 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
         </div>
         {errors.form && <p role="alert" className="rounded-xl bg-red-50 px-4 py-2 text-[12px] font-medium text-[#fd4438]">{errors.form}</p>}
         <div className="flex gap-2">
-          <Btn tone="green" type="submit" disabled={busy}>{busy ? 'جارٍ الإرسال…' : 'إرسال الدعوة'}</Btn>
+          <Btn tone="green" type="submit" disabled={busy || disabled}>{busy ? 'جارٍ الإرسال…' : 'إرسال الدعوة'}</Btn>
           <Btn tone="ghost" type="button" onClick={onCancel}>إلغاء</Btn>
         </div>
       </form>

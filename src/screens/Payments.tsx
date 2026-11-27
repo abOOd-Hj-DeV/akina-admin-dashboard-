@@ -5,6 +5,7 @@ import { listPayments, reviewPayment } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Banner, Btn, Card, DataState, DataValue, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
+import { formatAdminDate } from '../lib/format-date'
 
 /** مراجعة الحوالات: SuperAdmin+Admin كامل، الشريك المالي حوالاته فقط */
 export default function Payments() {
@@ -54,7 +55,7 @@ export default function Payments() {
                 <div className="mt-1 flex gap-4 text-[14px] text-[#657381]">
                   <span className="font-bold text-[#135e66]">{p.amount} SR</span>
                   <span>{p.plan}</span>
-                  <span>{p.date}</span>
+                  <span>{formatAdminDate(p.date)}</span>
                   <button className="font-medium text-[#1d919e]"><Icon name="doc" size={14} className="inline" /> {p.receipt} — عرض</button>
                 </div>
               </div>

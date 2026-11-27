@@ -5,6 +5,7 @@ import { listTickets, setTicketStatus } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, DataState, PageHeader, SearchBar, Table } from '../components/ui'
 import Icon from '../components/Icon'
+import { formatAdminDate } from '../lib/format-date'
 
 /** الدعم الفني: الدعم معالجة، المشرف عرض */
 export default function Tickets() {
@@ -49,7 +50,7 @@ export default function Tickets() {
                   <td className="px-3 py-3">
                     <Badge tone={st === 'مفتوحة' ? 'blue' : st === 'قيد المعالجة' ? 'amber' : 'green'}>{st}</Badge>
                   </td>
-                  <td className="px-3 py-3 text-[12px] text-[#657381]">{t.date}</td>
+                  <td className="px-3 py-3 text-[12px] text-[#657381]">{formatAdminDate(t.date)}</td>
                   <td className="px-3 py-3">
                     <div className="flex gap-1.5">
                       <Btn tone="ghost" className="px-3 py-1.5 text-[12px]">فتح</Btn>

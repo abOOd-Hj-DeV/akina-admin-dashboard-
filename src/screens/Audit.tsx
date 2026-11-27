@@ -4,6 +4,7 @@ import { listAudit } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Banner, Btn, Card, DataState, PageHeader, Table } from '../components/ui'
 import Icon from '../components/Icon'
+import { formatAdminDate, localizeAdminTimestamps } from '../lib/format-date'
 
 /** سجل التدقيق: Super Admin كامل، Admin قراءة فقط */
 export default function Audit() {
@@ -32,7 +33,7 @@ export default function Audit() {
         <Table cols={['الوقت', 'المستخدم', 'الإجراء', 'الهدف', 'التفاصيل', 'IP']}>
           {auditLog.map((e, i) => (
             <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-[#f7f7f7]/60">
-              <td className="whitespace-nowrap px-3 py-3 text-[12px] text-[#657381]" dir="ltr">{e.time}</td>
+              <td className="whitespace-nowrap px-3 py-3 text-[12px] text-[#657381]" dir="rtl">{formatAdminDate(e.time)}</td>
               <td className="px-3 py-3">
                 <div className="text-[14px] font-medium text-[#0a0a0a]" dir="ltr">{e.user}</div>
                 <div className="text-[12px] text-[#657381]">{e.userRole}</div>
@@ -43,7 +44,7 @@ export default function Audit() {
                 </Badge>
               </td>
               <td className="px-3 py-3 text-[12px] text-[#657381]" dir="ltr">{e.target}</td>
-              <td className="max-w-56 px-3 py-3 text-[14px] text-[#657381]">{e.details}</td>
+              <td className="max-w-56 px-3 py-3 text-[14px] text-[#657381]">{localizeAdminTimestamps(e.details)}</td>
               <td className="px-3 py-3 text-[12px] text-[#657381]" dir="ltr">{e.ip}</td>
             </tr>
           ))}

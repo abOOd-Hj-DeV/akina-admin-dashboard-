@@ -111,10 +111,4 @@ export const INVITABLE_STAFF_ROLES: Partial<Record<Role, Role[]>> = {
   admin: ['clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager'],
 }
 
-/** دعوة معالج (role=therapist + therapist.*) من شاشة المعالجين */
-export const THERAPIST_INVITERS: Role[] = ['super_admin', 'admin', 'clinical_supervisor']
-export const canInviteTherapist = (role: Role | null | undefined) => !!role && THERAPIST_INVITERS.includes(role)
-
 export const canDecideTherapist = (role: Role | null) => role === 'super_admin' || role === 'clinical_supervisor'
-export const canToggleTherapist = canDecideTherapist
-export const canRequestTherapistDocument = (role: Role | null) => role === 'super_admin'

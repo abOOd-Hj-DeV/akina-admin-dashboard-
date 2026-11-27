@@ -84,8 +84,13 @@ export interface DocRequest {
   subject: string
   reason: string
   requestedBy: string
+  recipient?: string
   date: string
-  status: 'قيد المراجعة' | 'مقبول' | 'مرفوض'
+  status: 'requested' | 'submitted' | 'approved' | 'rejected' | 'unknown'
+  hasFile?: boolean
+  downloadPath?: string
+  filename?: string
+  reviewNote?: string
 }
 
 export interface Ticket {

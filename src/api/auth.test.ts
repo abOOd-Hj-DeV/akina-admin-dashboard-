@@ -116,13 +116,13 @@ describe('مصادقة الإدارة', () => {
 describe('شاشات الحساب', () => {
   it('استعادة كلمة المرور: forgot-password ثم reset-password', async () => {
     reply({ message: 'sent' })
-    await forgotPasswordApi('+963983321260')
+    await forgotPasswordApi('+963990000000')
     reply({ message: 'reset' })
-    await resetPasswordApi('+963983321260', '123456', 'abcdefg1', 'abcdefg1')
+    await resetPasswordApi('+963990000000', '123456', 'abcdefg1', 'abcdefg1')
     expect(call(0).url).toContain('/api/v1/auth/forgot-password')
-    expect(call(0).body).toEqual({ whatsapp_number: '+963983321260' })
+    expect(call(0).body).toEqual({ whatsapp_number: '+963990000000' })
     expect(call(1).url).toContain('/api/v1/auth/reset-password')
-    expect(call(1).body).toEqual({ whatsapp_number: '+963983321260', otp: '123456', password: 'abcdefg1', password_confirmation: 'abcdefg1' })
+    expect(call(1).body).toEqual({ whatsapp_number: '+963990000000', otp: '123456', password: 'abcdefg1', password_confirmation: 'abcdefg1' })
     expect((call(1).init.headers as Record<string, string>).Authorization).toBeUndefined()
   })
   it('تغيير كلمة المرور: PUT /auth/user/password مع التوكن', async () => {

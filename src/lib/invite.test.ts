@@ -3,14 +3,14 @@ import { ApiError } from '../api/client'
 import { describeAuthError } from '../api/errors'
 import { buildInvite, mapInviteErrors } from './invite'
 
-const base = { name: ' د. ريم ', email: 'reem@sakina.app', whatsapp: '0983321260', country: 'SY' as const }
+const base = { name: ' د. ريم ', email: 'reem@sakina.app', whatsapp: '0990000000', country: 'SY' as const }
 
 describe('دعوة مستخدم (POST /admin/users)', () => {
   it('دعوة معالج ترسل رقم طلب التقديم والرقم بصيغة E.164 بدون بريد إلكتروني', () => {
     const { body, errors } = buildInvite({ ...base, role: 'therapist', applicationRef: ' app-42 ' })
     expect(errors).toEqual({})
     expect(body).toEqual({
-      name: 'د. ريم', whatsapp_number: '+963983321260', role: 'therapist',
+      name: 'د. ريم', whatsapp_number: '+963990000000', role: 'therapist',
       therapist: { application_ref: 'APP-42' },
     })
   })
@@ -26,7 +26,7 @@ describe('دعوة مستخدم (POST /admin/users)', () => {
   })
   it.each(['support_agent', 'content_manager', 'admin'] as const)('دعوة %s بدون حقول المعالج', (role) => {
     const { body } = buildInvite({ ...base, role })
-    expect(body).toEqual({ name: 'د. ريم', email: 'reem@sakina.app', whatsapp_number: '+963983321260', role })
+    expect(body).toEqual({ name: 'د. ريم', email: 'reem@sakina.app', whatsapp_number: '+963990000000', role })
   })
   it('رقم غير صالح → خطأ تحت الحقل', () => {
     const { body, errors } = buildInvite({ ...base, whatsapp: '123', role: 'admin' })
