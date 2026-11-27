@@ -231,7 +231,7 @@ export interface FeedItem { text: string; by: string; at: string; dot: string }
 export const activityFeed = (): Promise<FeedItem[]> =>
   API_MOCK
     ? wait(mock.activityFeed)
-    : listAudit().then(rows => rows.slice(0, 8).map(a => ({
+    : adminApi.audit({ page: 1 }).then(({ data }) => data.slice(0, 8).map(mapAudit).map(a => ({
         text: a.action,
         by: a.user,
         at: a.time,
