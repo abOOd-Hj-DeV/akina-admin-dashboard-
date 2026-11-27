@@ -4,7 +4,7 @@ import type { LaravelPaginator, Page } from './client'
 import type {
   ApiAdminPatient, ApiAdminPatientDetail, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAdminUser,
   ApiAuditEntry, ApiDocument, ApiFaq, ApiOverview, ApiPayment,
-  ApiProgram, ApiRedFlag, ApiRedFlagCounts, ApiRedFlagStats, ApiSupportTicket, ApiWithdrawal, CreateUserBody,
+  ApiEmergencyResources, ApiProgram, ApiRedFlag, ApiRedFlagCounts, ApiRedFlagStats, ApiSupportTicket, ApiWithdrawal, CreateUserBody,
   TherapistLifecycle, TherapistOptions,
 } from './types'
 
@@ -78,6 +78,7 @@ export const adminApi = {
   tickets: (f: { status?: string; page?: number } = {}) =>
     api.get<{ data: LaravelPaginator<ApiSupportTicket> }>(`/api/v1/admin/support${qs(f)}`),
   ticket: (id: string) => api.get<{ data: ApiSupportTicket }>(`/api/v1/admin/support/${id}`),
+  emergencyResources: () => api.get<{ data: ApiEmergencyResources }>('/api/v1/admin/support/emergency-resources'),
   assignTicket: (id: string, assigned_to: string) =>
     api.post(`/api/v1/admin/support/${id}/assign`, { assigned_to }, true),
   replyTicket: (id: string, body: string) =>

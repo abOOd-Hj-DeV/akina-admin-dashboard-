@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { listTickets, setTicketStatus } from '../services/data'
+import { listEmergencyResources, listTickets, setTicketStatus } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, DataState, PageHeader, SearchBar, Table } from '../components/ui'
 import Icon from '../components/Icon'
@@ -13,6 +13,12 @@ export default function Tickets() {
   const a = role ? access(role, 'tickets') : { level: 'denied' as const }
   const canProcess = a.level === 'full'
   const { data, loading, error, reload } = useAsync(listTickets)
+  const { data: resources, loading: resourcesLoading, error: resourcesError, reload: reloadResources } = useAsync(listEmergencyResources)
+  const contacts = [
+    ...(resources?.ambulance ? [{ label: 'الإسعاف', phones: [resources.ambulance] }] : []),
+    ...(resources?.police ? [{ label: 'الشرطة', phones: [resources.police] }] : []),
+    ...(resources?.hotlines ?? []),
+  ].filter(contact => contact.phones.length > 0)
   const tickets = data ?? []
   const [closed, setClosed] = useState<Record<string, boolean>>({})
   const [err, setErr] = useState<string | null>(null)
@@ -70,10 +76,17 @@ export default function Tickets() {
       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card>
           <h3 className="text-[16px] font-bold text-[#0a0a0a]">اتصالات الطوارئ</h3>
-          <p className="mt-1 text-[12px] text-[#657381]">للحالات الحرجة خارج ساعات العمل</p>
+          {resources?.notice && <p className="mt-1 text-[12px] text-[#657381]">{resources.notice}</p>}
+          <p className="mt-1 text-[12px] text-[#657381]">لا تتوفر معلومات المناوبة.</p>
+          {resourcesLoading && !resources && <p>جارٍ تحميل موارد الطوارئ…</p>}
+          {resourcesError && <p role="alert">تعذّر تحميل موارد الطوارئ. <button type="button" onClick={reloadResources}>إعادة المحاولة</button></p>}
+          {resources && contacts.length === 0 && <p>لا توجد أرقام طوارئ معتمدة للعرض.</p>}
           <div className="mt-3 space-y-2 text-[14px]">
-            <div className="flex justify-between rounded-xl bg-red-50 px-4 py-2.5"><span>خط الطوارئ الوطني</span><b dir="ltr">920033360</b></div>
-            <div className="flex justify-between rounded-xl bg-[#c7e4e7]/50 px-4 py-2.5"><span>المشرف المناوب</span><b>د. طارق العتيبي</b></div>
+            {contacts.map(({ label, phones }) => (
+              <div key={label} className="flex justify-between rounded-xl bg-red-50 px-4 py-2.5">
+                <span>{label}</span><b dir="ltr">{phones.join(' · ')}</b>
+              </div>
+            ))}
           </div>
         </Card>
         <Card>

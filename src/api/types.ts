@@ -88,6 +88,13 @@ export interface ApiPayment {
   created_at: string
 }
 
+export interface ApiEmergencyResources {
+  ambulance?: string | null
+  police?: string | null
+  hotlines?: Array<{ label: string; phones: string[] }> | null
+  notice?: string | null
+}
+
 export interface ApiRedFlag {
   id: string
   patient_id: string

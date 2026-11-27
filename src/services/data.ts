@@ -8,7 +8,7 @@
 import { API_MOCK, api, ApiError } from '../api/client'
 import { adminApi } from '../api/admin'
 import type {
-  ApiAdminPatient, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAuditEntry, ApiDocument,
+  ApiAdminPatient, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAuditEntry, ApiDocument, ApiEmergencyResources,
   ApiFaq, ApiOverview, ApiPayment, ApiProgram, ApiRedFlag, ApiSupportTicket, ApiWithdrawal,
   CreateUserBody, StaffAction, TherapistActionCode,
 } from '../api/types'
@@ -266,6 +266,9 @@ export const listDocRequests = () =>
 // مسار الدعم يرجع paginator لارافيل خام داخل data (الصفوف في data.data)
 export const listTickets = () =>
   API_MOCK ? wait(mock.tickets) : fetchTicketPages().then(rows => rows.map(mapTicket))
+
+export const listEmergencyResources = (): Promise<ApiEmergencyResources> =>
+  API_MOCK ? wait({}) : adminApi.emergencyResources().then(response => response.data)
 
 // الباك اند لا يملك حالة نشر للبرامج؛ كل برنامج مُعاد من /admin/programs منشور فعلياً
 const mapProgram = (p: ApiProgram): Program => ({
