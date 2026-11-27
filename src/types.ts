@@ -64,6 +64,7 @@ export interface RedFlag {
   level: 'حرج' | 'عالي' | 'متوسط' | 'تم الحل'
   assessmentScore: number | null
   onHold: boolean
+  allowedDecisions: Array<'reactivate' | 'keep_hold' | 'close'>
   holdSince: string | null
   reactivationRequestedAt: string | null
   actionTaken: string | null

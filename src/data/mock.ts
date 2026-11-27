@@ -113,6 +113,7 @@ export const redFlags: RedFlag[] = [
     level: 'حرج',
     assessmentScore: 27,
     onHold: true,
+    allowedDecisions: ['reactivate', 'keep_hold'],
     holdSince: '2026-04-18T07:10:00.000Z',
     reactivationRequestedAt: '2026-04-18T07:32:00.000Z',
     actionTaken: 'د. سارة أحمد — 2026-04-18T07:25:00.000Z: تمت مراجعة الخطة الأولية.',
@@ -133,6 +134,7 @@ export const redFlags: RedFlag[] = [
     level: 'عالي',
     assessmentScore: 18,
     onHold: false,
+    allowedDecisions: ['close'],
     holdSince: null,
     reactivationRequestedAt: null,
     actionTaken: null,
@@ -153,6 +155,7 @@ export const redFlags: RedFlag[] = [
     level: 'متوسط',
     assessmentScore: null,
     onHold: false,
+    allowedDecisions: [],
     holdSince: null,
     reactivationRequestedAt: null,
     actionTaken: null,
@@ -167,14 +170,15 @@ export function applyRedFlagDecision(
 ): RedFlag {
   const flag = redFlags.find(item => item.id === id)
   if (!flag) throw new Error('الحالة غير متاحة.')
-  if (flag.status === 'resolved') {
-    throw new ApiError(409, 'الحالة محلولة ولا يمكن اتخاذ قرار جديد.', undefined, 'decision_not_applicable')
+  if (!flag.allowedDecisions.includes(decision)) {
+    throw new ApiError(409, 'هذا القرار غير متاح لهذه الحالة.', undefined, 'decision_not_applicable')
   }
 
   flag.actionTaken = [flag.actionTaken, note].filter(Boolean).join('\n\n')
   if (decision === 'reactivate' || decision === 'close') {
     flag.status = 'resolved'
     flag.level = 'تم الحل'
+    flag.allowedDecisions = []
   }
   if (decision === 'reactivate') {
     flag.onHold = false

@@ -105,6 +105,7 @@ export interface ApiRedFlag {
   assessment_id: string | null
   assessment_score?: number | null
   on_hold: boolean
+  allowed_decisions?: Array<'reactivate' | 'keep_hold' | 'close'>
   hold_since: string | null
   reactivation_requested_at: string | null
   previous_flag_id: string | null

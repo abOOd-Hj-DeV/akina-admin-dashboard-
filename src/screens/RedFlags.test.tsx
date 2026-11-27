@@ -23,6 +23,7 @@ const heldFlag: RedFlag = {
   level: 'حرج',
   assessmentScore: 27,
   onHold: true,
+  allowedDecisions: ['reactivate', 'keep_hold'],
   holdSince: '2026-04-18T07:10:00.000Z',
   reactivationRequestedAt: '2026-04-18T07:32:00.000Z',
   actionTaken: 'تمت مراجعة الحالة.\nتواصل الفريق مع المريض.',
@@ -65,7 +66,7 @@ describe('واجهة حالات الخطر', () => {
 
   it('يعرض قراري إعادة التفعيل والإبقاء وملاحظة مطلوبة قبل الإرسال', () => {
     const markup = renderToStaticMarkup(
-      <RedFlagDecisionForm onHold onSubmit={vi.fn(async () => undefined)} onCancel={vi.fn()} />,
+      <RedFlagDecisionForm allowedDecisions={['reactivate', 'keep_hold']} onSubmit={vi.fn(async () => undefined)} onCancel={vi.fn()} />,
     )
 
     expect(markup).toContain('إعادة تفعيل الحساب')
@@ -80,6 +81,7 @@ describe('واجهة حالات الخطر', () => {
       status: 'resolved' as const,
       level: 'تم الحل' as const,
       onHold: false,
+      allowedDecisions: [],
       actionTaken: 'تمت إعادة تفعيل الحساب بعد المراجعة.',
     }
     const markup = renderToStaticMarkup(
@@ -89,6 +91,13 @@ describe('واجهة حالات الخطر', () => {
     expect(markup).toContain('تمت إعادة تفعيل الحساب بعد المراجعة.')
     expect(markup).not.toContain('تسجيل قرار المراجعة')
     expect(markup).not.toContain('<form')
+  })
+
+  it('does not offer hold decisions for a held patient when this row has no capabilities', () => {
+    const unrelated = { ...heldFlag, type: 'low_mood', allowedDecisions: [] }
+    const markup = renderToStaticMarkup(<RedFlagCard flag={unrelated} full onDecision={vi.fn()} />)
+    expect(markup).toContain('الحساب معلّق')
+    expect(markup).not.toContain('تسجيل قرار المراجعة')
   })
 
   it('rejects mock decisions for resolved flags with a conflict', () => {

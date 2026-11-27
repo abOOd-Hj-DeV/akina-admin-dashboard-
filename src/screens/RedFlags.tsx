@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
 import { decideRedFlag, countOpenRedFlags, listRedFlags } from '../services/data'
@@ -14,6 +15,14 @@ const PRIORITY_LABELS = {
   medium: 'متوسطة',
   low: 'منخفضة',
 } as const
+
+type Decision = RedFlag['allowedDecisions'][number]
+
+const decisionLabels: Record<Decision, string> = {
+  reactivate: 'إعادة تفعيل الحساب',
+  keep_hold: 'إبقاء الحساب معلّقًا',
+  close: 'إغلاق الحالة',
+}
 
 export default function RedFlags() {
   const { role } = useAuth()
@@ -68,7 +77,12 @@ export default function RedFlags() {
             flag={flag}
             full={full}
             onDecision={async (decision, note) => {
-              await decideRedFlag(flag.id, decision, note)
+              try {
+                await decideRedFlag(flag.id, decision, note)
+              } catch (cause) {
+                if (cause instanceof ApiError && cause.status === 409) reload()
+                throw cause
+              }
               setRevision((value) => value + 1)
             }}
           />
@@ -90,7 +104,7 @@ export function RedFlagCard({
   const [decisionOpen, setDecisionOpen] = useState(false)
   const whatsapp = flag.patientWhatsapp?.replace(/\D/g, '')
   const priority = PRIORITY_LABELS[flag.priority]
-  const canDecide = full && flag.status !== 'resolved'
+  const canDecide = full && flag.allowedDecisions.length > 0
 
   return (
     <Card className="flex flex-col gap-4">
@@ -140,7 +154,7 @@ export function RedFlagCard({
       </div>
       {canDecide && decisionOpen && (
         <RedFlagDecisionForm
-          onHold={flag.onHold}
+          allowedDecisions={flag.allowedDecisions}
           onSubmit={onDecision}
           onCancel={() => setDecisionOpen(false)}
         />
@@ -150,22 +164,23 @@ export function RedFlagCard({
 }
 
 export function RedFlagDecisionForm({
-  onHold,
+  allowedDecisions,
   onSubmit,
   onCancel,
 }: {
-  onHold: boolean
+  allowedDecisions: Decision[]
   onSubmit: (decision: 'reactivate' | 'keep_hold' | 'close', note: string) => Promise<void>
   onCancel: () => void
 }) {
-  const [decision, setDecision] = useState<'reactivate' | 'keep_hold' | 'close'>(onHold ? 'reactivate' : 'close')
+  const [choice, setChoice] = useState<Decision>()
+  const decision = choice && allowedDecisions.includes(choice) ? choice : allowedDecisions[0]
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (note.trim().length < 3 || busy) return
+    if (!decision || note.trim().length < 3 || busy) return
     setBusy(true)
     setError('')
     try {
@@ -180,20 +195,18 @@ export function RedFlagDecisionForm({
 
   return (
     <form className="space-y-3 border-t border-gray-100 pt-4" onSubmit={(event) => void submit(event)}>
-      {onHold ? (
+      {allowedDecisions.length > 1 ? (
         <fieldset className="space-y-2 text-[14px] text-[#1f1f21]">
           <legend className="mb-2 font-bold">القرار</legend>
-          <label className="flex items-center gap-2">
-            <input type="radio" name="decision" value="reactivate" checked={decision === 'reactivate'} onChange={() => setDecision('reactivate')} />
-            إعادة تفعيل الحساب
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="radio" name="decision" value="keep_hold" checked={decision === 'keep_hold'} onChange={() => setDecision('keep_hold')} />
-            إبقاء الحساب معلّقًا
-          </label>
+          {allowedDecisions.map(option => (
+            <label key={option} className="flex items-center gap-2">
+              <input type="radio" name="decision" value={option} checked={decision === option} onChange={() => setChoice(option)} />
+              {decisionLabels[option]}
+            </label>
+          ))}
         </fieldset>
       ) : (
-        <p className="text-[14px] font-bold text-[#1f1f21]">القرار: إغلاق الحالة</p>
+        decision && <p className="text-[14px] font-bold text-[#1f1f21]">القرار: {decisionLabels[decision]}</p>
       )}
       <label className="block text-[14px] font-medium text-[#1f1f21]">
         الملاحظة
@@ -212,7 +225,7 @@ export function RedFlagDecisionForm({
       <div className="flex gap-2">
         <button
           type="submit"
-          disabled={busy || note.trim().length < 3}
+          disabled={!decision || busy || note.trim().length < 3}
           className="inline-flex items-center justify-center rounded-xl bg-[#1d919e] px-4 py-2.5 text-[14px] font-bold text-white disabled:opacity-50"
         >
           {busy ? 'جارٍ الحفظ…' : 'حفظ القرار'}

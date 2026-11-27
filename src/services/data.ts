@@ -67,6 +67,7 @@ export const mapFlag = (f: ApiRedFlag): RedFlag => ({
   level: f.status === 'resolved' ? 'تم الحل' : (FLAG_LEVEL[f.priority] ?? 'متوسط'),
   assessmentScore: f.assessment_score ?? null,
   onHold: f.on_hold,
+  allowedDecisions: f.allowed_decisions ?? [],
   holdSince: f.hold_since,
   reactivationRequestedAt: f.reactivation_requested_at,
   actionTaken: f.action_taken,
