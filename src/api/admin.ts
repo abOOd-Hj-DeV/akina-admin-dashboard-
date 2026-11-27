@@ -26,7 +26,7 @@ export const adminApi = {
   patient: (id: string) => api.get<{ data: ApiAdminPatientDetail }>(`/api/v1/admin/patients/${id}`),
 
   therapists: (f: { lifecycle_state?: TherapistLifecycle; q?: string; page: number; per_page?: number }) =>
-    api.get<Required<Page<ApiAdminTherapist>>>(`/api/v1/admin/therapists${qs(f)}`),
+    api.get<Required<Page<ApiAdminTherapist>> & { meta?: { can_invite?: boolean } }>(`/api/v1/admin/therapists${qs(f)}`),
   therapist: (id: string) => api.get<{ data: ApiAdminTherapistDetail }>(`/api/v1/admin/therapists/${id}`),
   therapistOptions: () => api.get<{ data: TherapistOptions }>('/api/v1/meta/therapist-options'),
   approveTherapist: (id: string, body: { revision_id: string; note?: string }) =>

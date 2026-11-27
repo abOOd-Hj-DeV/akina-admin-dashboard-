@@ -50,7 +50,7 @@ const page = (data: ApiAdminTherapist[], current_page = 1, last_page = 1, total 
   json({ data, pagination: { current_page, last_page, total } })
 const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>()
 const defaultResponse = (url: string) => {
-  if (url.startsWith(root + '?')) return page(rows)
+  if (url.startsWith(root + '?')) return json({ data: rows, pagination: { current_page: 1, last_page: 1, total: rows.length }, meta: { can_invite: auth.role !== 'admin' } })
   const detail = rows.find(row => url === root + '/' + row.id)
   if (detail) return json({ data: detail })
   if (url === '/api/v1/meta/therapist-options') return json({ data: remoteOptions })
@@ -180,7 +180,7 @@ it.each([
     ['تعليق الحساب'], ['إعادة إرسال الدعوة', 'إلغاء الدعوة'], ['إعادة تفعيل الحساب'],
   ]
   const actions = [...new Set(expected.flat())]
-  expect(button(container, '+ دعوة معالج')).toBeDefined()
+  expect(!!button(container, '+ دعوة معالج')).toBe(canAct)
   for (const [index, allowed] of expected.entries()) {
     const tr = container.querySelectorAll('tbody tr')[index]
     expect(actions.filter(label => !!button(tr, label))).toEqual(canAct ? actions.filter(label => allowed.includes(label) && !['قبول', 'رفض'].includes(label)) : [])
@@ -396,6 +396,42 @@ it('invites a therapist with only a name, WhatsApp and normalized reference, and
     name: 'معالج تجريبي', whatsapp_number: '+963990000000', role: 'therapist', therapist: { application_ref: 'APP-42' },
   })
   expect(form.querySelector('[role=alert]')?.textContent).toBe('رقم طلب التقديم مستخدم لمعالج آخر')
+  fetchMock.mockImplementation(async url => url === endpoint
+    ? json({ code: 'whatsapp_check_unavailable', message: 'Lookup unavailable', errors: { whatsapp_number: ['Provider unavailable'] } }, 503)
+    : defaultResponse(url))
+  await click(form, 'إرسال الدعوة')
+  expect(form.querySelector('[role=alert]')?.textContent).toContain('حاول إرسال الدعوة مرة أخرى بعد قليل')
+  expect(form.textContent).not.toContain('غير مسجّل')
+  expect(container.textContent).not.toContain('أُرسلت الدعوة')
+})
+
+it.each(['admin', 'super_admin', 'clinical_supervisor'] as const)('requires explicit current invite capability for %s', async role => {
+  auth.role = role
+  const response = (meta?: { can_invite: boolean }) => json({ data: [], pagination: { current_page: 1, last_page: 1, total: 0 }, meta })
+  let resolve!: (response: Response) => void
+  fetchMock.mockImplementation(() => new Promise(r => { resolve = r }))
+  const container = await render()
+  const invite = () => button(container, '+ دعوة معالج')
+  expect(invite()).toBeUndefined()
+  await act(async () => resolve(response({ can_invite: true })))
+  expect(invite()?.disabled).toBe(false)
+  await click(container, '+ دعوة معالج')
+  const focus = async () => act(async () => { window.dispatchEvent(new Event('focus')) })
+  await focus()
+  expect(invite()?.disabled).toBe(true)
+  expect(button(container, 'إرسال الدعوة')?.disabled).toBe(true)
+  await act(async () => resolve(response({ can_invite: false })))
+  expect(invite()).toBeUndefined()
+  expect(button(container, 'إرسال الدعوة')).toBeUndefined()
+  await focus()
+  await act(async () => resolve(response()))
+  expect(invite()).toBeUndefined()
+  await focus()
+  await act(async () => resolve(response({ can_invite: true })))
+  expect(invite()).toBeDefined()
+  await focus()
+  await act(async () => resolve(json({}, 403)))
+  expect(invite()).toBeUndefined()
 })
 
 it('supports approval and status filtering in mock mode without making HTTP requests', async () => {

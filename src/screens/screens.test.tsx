@@ -63,8 +63,8 @@ describe('الشاشات', () => {
     expect(html).toContain('واتساب')
     expect(html).toContain('+ دعوة مستخدم')
   })
-  it.each(['super_admin', 'admin', 'clinical_supervisor'] as Role[])('المعالجون: زر دعوة معالج ظاهر لـ%s', async (role) => {
-    expect(await render(() => import('./Therapists'), role)).toContain('+ دعوة معالج')
+  it.each(['super_admin', 'admin', 'clinical_supervisor'] as Role[])('المعالجون: لا دعوة قبل تحميل الصلاحية لـ%s', async (role) => {
+    expect(await render(() => import('./Therapists'), role)).not.toContain('+ دعوة معالج')
   })
   it.each(['finance_partner', 'support_agent', 'content_manager'] as Role[])('المعالجون: لا زر دعوة لـ%s', async (role) => {
     expect(await render(() => import('./Therapists'), role)).not.toContain('دعوة معالج')

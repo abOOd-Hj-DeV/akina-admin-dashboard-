@@ -13,7 +13,7 @@ import type {
   CreateUserBody, TherapistActionCode,
 } from '../api/types'
 import type {
-  AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Ticket,
+  AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Role, Ticket,
 } from '../types'
 import * as mock from '../data/mock'
 import { THERAPIST_OPTIONS } from '../data/therapistOptions'
@@ -169,7 +169,7 @@ const fetchTicketPages = async (): Promise<ApiSupportTicket[]> => {
 export const listPatients = (f?: Parameters<typeof adminApi.patients>[0]) =>
   API_MOCK ? wait(mock.patients) : fetchPages(page => adminApi.patients({ ...f, page })).then(rows => rows.map(mapPatient))
 
-export async function listTherapists(f: Parameters<typeof adminApi.therapists>[0]) {
+export async function listTherapists(f: Parameters<typeof adminApi.therapists>[0], mockRole?: Role | null) {
   if (!API_MOCK) return adminApi.therapists(f)
   const { lifecycle_state, q, page, per_page = 15 } = f
   const query = q?.trim().toLowerCase()
@@ -185,6 +185,7 @@ export async function listTherapists(f: Parameters<typeof adminApi.therapists>[0
     }))
   return {
     data,
+    meta: { can_invite: mockRole === 'super_admin' || mockRole === 'clinical_supervisor' },
     pagination: { current_page: page, last_page: Math.max(1, Math.ceil(rows.length / per_page)), total: rows.length },
   }
 }

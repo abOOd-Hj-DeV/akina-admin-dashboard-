@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { TherapistLifecycle } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { access, canInviteTherapist } from '../auth/permissions'
+import { access } from '../auth/permissions'
 import { Badge, Banner, Btn, Card, DataState, PageHeader, Table } from '../components/ui'
 import InviteUserForm from '../components/InviteUserForm'
 import { useAsync } from '../hooks/useAsync'
@@ -38,7 +38,7 @@ function TherapistRoster({ readOnly }: { readOnly: boolean }) {
   }
   const [action, setAction] = useState<TherapistAction | null>(null)
   const { data, loading, error, refreshing, reload } = useAsync(
-    () => listTherapists({ ...(state ? { lifecycle_state: state } : {}), page, per_page: PAGE_SIZE, q: query }),
+    () => listTherapists({ ...(state ? { lifecycle_state: state } : {}), page, per_page: PAGE_SIZE, q: query }, role),
     [state, page, query],
   )
   const mounted = useRef(false)
@@ -54,7 +54,8 @@ function TherapistRoster({ readOnly }: { readOnly: boolean }) {
   const pageOutOfRange = !error && lastPage !== undefined && page > lastPage
   if (pageOutOfRange) setPage(lastPage)
 
-  const canInvite = canInviteTherapist(role)
+  const canInvite = !loading && !error && data?.meta?.can_invite === true
+  if (inviting && !canInvite) setInviting(false)
   const actionRow = action && data?.data.find(row => row.id === action.therapist.id)
   if (action && (loading || error || !actionRow || therapistSnapshot(actionRow) !== therapistSnapshot(action.therapist)
     || !allowedTherapistActions(actionRow, role).includes(action.kind))) setAction(null)
@@ -67,12 +68,12 @@ function TherapistRoster({ readOnly }: { readOnly: boolean }) {
 
   return (
     <>
-      <PageHeader title="إدارة المعالجين" sub={readOnly ? 'يمكنك عرض الملفات وإرسال دعوات جديدة.' : 'متابعة الدعوات ومراجعة الملفات المهنية'}
-        action={canInvite ? <Btn onClick={() => { setInviting(v => !v); setNotice(null) }}>+ دعوة معالج</Btn> : undefined} />
+      <PageHeader title="إدارة المعالجين" sub={readOnly ? 'يمكنك عرض الملفات المهنية.' : 'متابعة الدعوات ومراجعة الملفات المهنية'}
+        action={canInvite ? <Btn disabled={refreshing} onClick={() => { setInviting(v => !v); setNotice(null) }}>+ دعوة معالج</Btn> : undefined} />
       {notice && <Banner tone={notice.conflict ? 'amber' : 'teal'}>
         <span role={notice.conflict ? 'alert' : 'status'}>{notice.message}</span>
       </Banner>}
-      {canInvite && inviting && <InviteUserForm roles={['therapist']} onCancel={() => setInviting(false)} onDone={() => {
+      {canInvite && inviting && <InviteUserForm roles={['therapist']} disabled={refreshing} onCancel={() => setInviting(false)} onDone={() => {
         setInviting(false)
         report('أُرسلت الدعوة عبر واتساب. الخطوة التالية هي تفعيل حساب المعالج.')
       }} />}

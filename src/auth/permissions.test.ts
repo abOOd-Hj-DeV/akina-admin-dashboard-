@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { access, canView, homeFor, canInviteTherapist, INVITABLE_STAFF_ROLES } from './permissions'
+import { access, canView, homeFor, INVITABLE_STAFF_ROLES } from './permissions'
 import type { Role, Screen } from '../types'
 
 const roles: Role[] = ['super_admin', 'admin', 'clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager']
@@ -59,9 +59,5 @@ describe('مصفوفة الصلاحيات', () => {
     expect(INVITABLE_STAFF_ROLES.admin).toEqual(['clinical_supervisor', 'finance_partner', 'support_agent', 'content_manager'])
     expect(INVITABLE_STAFF_ROLES.clinical_supervisor).toBeUndefined()
     expect(INVITABLE_STAFF_ROLES.admin).not.toContain('admin')
-  })
-  it('دعوة معالج: الرئيسي والمدير والمشرف السريري', () => {
-    expect(roles.filter(canInviteTherapist)).toEqual(['super_admin', 'admin', 'clinical_supervisor'])
-    expect(canInviteTherapist(null)).toBe(false)
   })
 })

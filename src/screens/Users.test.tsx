@@ -86,6 +86,6 @@ it('routes an admin from a therapist user row to that therapist’s read-only li
   expect(adminApi.therapist).toHaveBeenCalledWith(user.id)
   expect(view.container.querySelector('dialog')?.textContent).toContain('بانتظار الملف المهني')
   expect(view.container.querySelector('dialog')?.textContent).not.toContain('تعليق الحساب')
-  expect(view.container.textContent).toContain('+ دعوة معالج')
+  expect(view.container.textContent).not.toContain('+ دعوة معالج')
   await view.unmount()
 })
