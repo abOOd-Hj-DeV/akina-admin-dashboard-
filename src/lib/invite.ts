@@ -3,41 +3,45 @@ import type { CountryCode } from 'libphonenumber-js/min'
 import type { ApiRole, CreateUserBody } from '../api/types'
 import { PHONE_INVALID_MSG, toE164 } from './phone'
 
-export type InviteField = 'name' | 'email' | 'whatsapp_number' | 'role' | 'therapist.specialty' | 'therapist.country' | 'therapist.languages'
+export type InviteField = 'name' | 'email' | 'whatsapp_number' | 'role' | 'therapist.application_ref'
+export const APPLICATION_REF_TAKEN = 'رقم طلب التقديم مستخدم لمعالج آخر'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-export const splitLanguages = (s: string) => s.split(/[,،]/).map((x) => x.trim()).filter(Boolean)
+const APPLICATION_REF_RE = /^[A-Z0-9][A-Z0-9-]{1,39}$/
 
 /** يبني جسم POST /admin/users؛ يعيد أخطاء الحقول إن وُجدت */
 export function buildInvite(input: {
   name: string; email: string; whatsapp: string; country: CountryCode; role: ApiRole
-  specialty?: string; therapistCountry?: string; languages?: string
+  applicationRef?: string
 }): { body: CreateUserBody | null; errors: Partial<Record<InviteField, string>> } {
   const errors: Partial<Record<InviteField, string>> = {}
   const wa = toE164(input.whatsapp, input.country)
   if (!input.name.trim()) errors.name = 'الاسم مطلوب.'
-  if (!EMAIL_RE.test(input.email.trim())) errors.email = 'البريد الإلكتروني غير صحيح.'
   if (!wa) errors.whatsapp_number = PHONE_INVALID_MSG
-  const body: CreateUserBody = { name: input.name.trim(), email: input.email.trim(), whatsapp_number: wa ?? '', role: input.role }
+  const common = { name: input.name.trim(), whatsapp_number: wa ?? '' }
+  let body: CreateUserBody
   if (input.role === 'therapist') {
-    const specialty = (input.specialty ?? '').trim()
-    const country = (input.therapistCountry ?? '').trim()
-    if (!specialty) errors['therapist.specialty'] = 'التخصص مطلوب.'
-    if (!country) errors['therapist.country'] = 'الدولة مطلوبة.'
-    const languages = splitLanguages(input.languages ?? '')
-    body.therapist = { specialty, country, ...(languages.length ? { languages } : {}) }
+    const application_ref = (input.applicationRef ?? '').trim().toUpperCase()
+    if (!APPLICATION_REF_RE.test(application_ref)) {
+      errors['therapist.application_ref'] = application_ref
+        ? 'أدخل من 2 إلى 40 حرفًا لاتينيًا أو رقمًا، ويمكن استخدام الشرطة بعد الحرف أو الرقم الأول.'
+        : 'رقم طلب التقديم مطلوب.'
+    }
+    body = { ...common, role: input.role, therapist: { application_ref } }
+  } else {
+    const email = input.email.trim()
+    if (!EMAIL_RE.test(email)) errors.email = 'البريد الإلكتروني غير صحيح.'
+    body = { ...common, role: input.role, email }
   }
   return { body: Object.keys(errors).length ? null : body, errors }
 }
 
-const FIELDS: InviteField[] = ['name', 'email', 'whatsapp_number', 'role', 'therapist.specialty', 'therapist.country', 'therapist.languages']
+const FIELDS: InviteField[] = ['name', 'email', 'whatsapp_number', 'role', 'therapist.application_ref']
 
 /** يوزّع أخطاء الخادم على حقول النموذج؛ ما لا يطابق حقلاً يظهر كرسالة عامة */
 export function mapInviteErrors(fieldErrors: Record<string, string>, message: string): Partial<Record<InviteField | 'form', string>> {
   const out: Partial<Record<InviteField | 'form', string>> = {}
-  for (const [k, v] of Object.entries(fieldErrors)) {
-    const key = k.startsWith('therapist.languages') ? 'therapist.languages' : k
-    if (FIELDS.includes(key as InviteField)) out[key as InviteField] = v
+  for (const key of FIELDS) {
+    if (fieldErrors[key]) out[key] = fieldErrors[key]
   }
   if (!Object.keys(out).length) out.form = message
   return out

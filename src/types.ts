@@ -36,16 +36,6 @@ export interface Patient {
   needsReport?: boolean
 }
 
-export interface Therapist {
-  id: string
-  name: string
-  status: 'معتمد' | 'قيد المراجعة' | 'معلّق' | 'معطّل'
-  patients: number
-  rating?: number
-  ratingCount?: number
-  joined: string
-}
-
 export interface Payment {
   id: string
   patientId: string

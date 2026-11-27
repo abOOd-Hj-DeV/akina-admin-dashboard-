@@ -2,7 +2,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { getPatient, listRedFlags, listTherapists } from '../services/data'
+import { getPatient, listRedFlags, listTherapistNames } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { API_MOCK } from '../api/client'
 import { Badge, Btn, Card, DataState, PageHeader, ProgressBar } from '../components/ui'
@@ -42,7 +42,7 @@ export default function PatientProfile() {
   const redFlags = flagData ?? []
   const canListTherapists = role === 'admin' || role === 'super_admin'
   const { data: therapistData } = useAsync(
-    canListTherapists ? listTherapists : () => Promise.resolve([]),
+    canListTherapists ? listTherapistNames : () => Promise.resolve([]),
     [role, canListTherapists],
   )
   const therapists = therapistData ?? []

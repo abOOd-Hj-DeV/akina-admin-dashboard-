@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import type { CountryCode } from 'libphonenumber-js/min'
-import { API_MOCK } from '../api/client'
-import { adminApi } from '../api/admin'
 import { describeAuthError } from '../api/errors'
 import type { ApiRole } from '../api/types'
 import { ROLE_LABELS } from '../auth/permissions'
@@ -9,6 +7,7 @@ import type { Role } from '../types'
 import { DEFAULT_COUNTRY } from '../lib/phone'
 import { buildInvite, mapInviteErrors, type InviteField as Field } from '../lib/invite'
 import { useFieldErrors } from '../hooks/useFieldErrors'
+import { inviteUser } from '../services/data'
 import { Btn, Card } from './ui'
 import PhoneInput, { FieldError } from './PhoneInput'
 
@@ -26,20 +25,19 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
   const [wa, setWa] = useState('')
   const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY)
   const [role, setRole] = useState<ApiRole>(roles[0])
-  const [specialty, setSpecialty] = useState('')
-  const [tCountry, setTCountry] = useState('')
-  const [languages, setLanguages] = useState('')
+  const [applicationRef, setApplicationRef] = useState('')
   const [busy, setBusy] = useState(false)
   const { errors, clear, reset, replace } = useFieldErrors<Field>()
   const isTherapist = role === 'therapist'
 
   const submit = async () => {
+    if (busy) return
     reset()
-    const { body, errors: local } = buildInvite({ name, email, whatsapp: wa, country, role, specialty, therapistCountry: tCountry, languages })
+    const { body, errors: local } = buildInvite({ name, email, whatsapp: wa, country, role, applicationRef })
     if (!body) { replace(local); return }
     setBusy(true)
     try {
-      if (!API_MOCK) await adminApi.createUser(body)
+      await inviteUser(body)
       onDone()
     } catch (e) {
       const d = describeAuthError(e, 'تعذّر إرسال الدعوة.')
@@ -57,10 +55,10 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
             <input value={name} onChange={(e) => { setName(e.target.value); clear('name') }} placeholder="الاسم" aria-label="الاسم" className={`${box} ${tone(errors.name)}`} />
             <FieldError>{errors.name}</FieldError>
           </div>
-          <div>
+          {!isTherapist && <div>
             <input value={email} onChange={(e) => { setEmail(e.target.value); clear('email') }} placeholder="البريد الإلكتروني" aria-label="البريد الإلكتروني" dir="ltr" className={`${box} ${tone(errors.email)}`} />
             <FieldError>{errors.email}</FieldError>
-          </div>
+          </div>}
           <PhoneInput
             id="invite-whatsapp"
             value={wa}
@@ -78,20 +76,16 @@ export default function InviteUserForm({ roles, onDone, onCancel }: {
             </div>
           ) : null}
           {isTherapist && (
-            <>
-              <div>
-                <input value={specialty} onChange={(e) => { setSpecialty(e.target.value); clear('therapist.specialty') }} placeholder="التخصص" aria-label="التخصص" className={`${box} ${tone(errors['therapist.specialty'])}`} />
-                <FieldError>{errors['therapist.specialty']}</FieldError>
-              </div>
-              <div>
-                <input value={tCountry} onChange={(e) => { setTCountry(e.target.value); clear('therapist.country') }} placeholder="الدولة" aria-label="الدولة" className={`${box} ${tone(errors['therapist.country'])}`} />
-                <FieldError>{errors['therapist.country']}</FieldError>
-              </div>
-              <div className="md:col-span-2">
-                <input value={languages} onChange={(e) => { setLanguages(e.target.value); clear('therapist.languages') }} placeholder="اللغات (اختياري، افصل بفاصلة: العربية، English)" aria-label="اللغات" className={`${box} ${tone(errors['therapist.languages'])}`} />
-                <FieldError>{errors['therapist.languages']}</FieldError>
-              </div>
-            </>
+            <div>
+              <label className="text-sm">
+                رقم طلب التقديم
+                <input value={applicationRef} onChange={(e) => { setApplicationRef(e.target.value); clear('therapist.application_ref') }}
+                  dir="ltr" autoCapitalize="characters" spellCheck={false} required
+                  aria-invalid={!!errors['therapist.application_ref']} aria-describedby="invite-application-ref-error"
+                  className={`${box} ${tone(errors['therapist.application_ref'])}`} />
+              </label>
+              <FieldError id="invite-application-ref-error">{errors['therapist.application_ref']}</FieldError>
+            </div>
           )}
         </div>
         {errors.form && <p role="alert" className="rounded-xl bg-red-50 px-4 py-2 text-[12px] font-medium text-[#fd4438]">{errors.form}</p>}

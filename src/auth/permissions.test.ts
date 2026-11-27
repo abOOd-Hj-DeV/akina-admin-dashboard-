@@ -41,8 +41,8 @@ describe('مصفوفة الصلاحيات', () => {
     expect(access('content_manager', 'programs').level).toBe('denied')
     expect(access('support_agent', 'patients').level).toBe('denied')
     expect(access('support_agent', 'doc-requests').level).toBe('denied')
-    // المشرف: دعوة معالج فقط (بدون قائمة)
-    expect(access('clinical_supervisor', 'therapists')).toEqual({ level: 'limited', mask: 'invite-only' })
+    expect(access('clinical_supervisor', 'therapists').level).toBe('full')
+    expect(access('admin', 'therapists').level).toBe('read')
     expect(access('clinical_supervisor', 'doc-requests').level).toBe('denied')
   })
   it('وجهة الدخول لكل دور شاشة مسموحة', () => {

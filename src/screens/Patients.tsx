@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { listPatients, listTherapists } from '../services/data'
+import { listPatients, listTherapistNames } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Card, Chip, DataState, DataValue, PageHeader, ProgressBar, SearchBar, Table } from '../components/ui'
 import Icon from '../components/Icon'
@@ -12,11 +12,10 @@ const statusTone = (s: string) => (s === 'نشط' ? 'green' : s === 'في خطر
 export default function Patients() {
   const { role } = useAuth()
   const a = role ? access(role, 'patients') : { level: 'denied' as const }
-  const therapistAccess = role ? access(role, 'therapists') : { level: 'denied' as const }
-  const canListTherapists = therapistAccess.level !== 'denied' && therapistAccess.mask !== 'invite-only'
+  const canListTherapists = role === 'admin' || role === 'super_admin'
   const { data: patientData, loading, error, reload } = useAsync(listPatients)
   const { data: therapistData, loading: therapistsLoading, error: therapistsError, reload: reloadTherapists } = useAsync(
-    canListTherapists ? listTherapists : () => Promise.resolve([]),
+    canListTherapists ? listTherapistNames : () => Promise.resolve([]),
     [role, canListTherapists],
   )
   const patients = patientData ?? []

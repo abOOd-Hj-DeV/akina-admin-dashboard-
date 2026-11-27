@@ -63,15 +63,14 @@ describe('الشاشات', () => {
     expect(html).toContain('واتساب')
     expect(html).toContain('+ دعوة مستخدم')
   })
-  it.each(['super_admin', 'admin', 'clinical_supervisor'] as Role[])('المعالجون: زر دعوة معالج ظاهر لـ%s', async (role) => {
+  it.each(['super_admin', 'clinical_supervisor'] as Role[])('المعالجون: زر دعوة معالج ظاهر لـ%s', async (role) => {
     expect(await render(() => import('./Therapists'), role)).toContain('+ دعوة معالج')
   })
-  it.each(['finance_partner', 'support_agent', 'content_manager'] as Role[])('المعالجون: لا زر دعوة لـ%s', async (role) => {
+  it.each(['admin', 'finance_partner', 'support_agent', 'content_manager'] as Role[])('المعالجون: لا زر دعوة لـ%s', async (role) => {
     expect(await render(() => import('./Therapists'), role)).not.toContain('دعوة معالج')
   })
-  it('المشرف السريري يرى الدعوة فقط بدون قائمة المعالجين', async () => {
-    const html = await render(() => import('./Therapists'), 'clinical_supervisor')
-    expect(html).not.toContain('<table')
-    expect(await render(() => import('./Therapists'), 'admin')).toContain('<table')
+  it('المشرف السريري والمدير يمكنهما تصفية قائمة المعالجين', async () => {
+    expect(await render(() => import('./Therapists'), 'clinical_supervisor')).toContain('حالة الطلب')
+    expect(await render(() => import('./Therapists'), 'admin')).toContain('حالة الطلب')
   })
 })

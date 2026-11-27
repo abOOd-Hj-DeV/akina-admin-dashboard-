@@ -90,7 +90,7 @@ export default function Users() {
             <tr key={u.id} className="border-t border-gray-50">
               <td className="px-3 py-3 font-medium text-[#0a0a0a]">{u.name}</td>
               <td className="px-3 py-3 text-[#0a0a0a]" dir="ltr">{u.whatsapp_number || '—'}</td>
-              <td className="px-3 py-3 text-[#657381]" dir="ltr">{u.email}</td>
+              <td className="px-3 py-3 text-[#657381]" dir="ltr">{u.email ?? '—'}</td>
               <td className="px-3 py-3"><Badge tone="purple">{u.role in ROLE_LABELS ? ROLE_LABELS[u.role as Role] : u.role}</Badge></td>
               <td className="px-3 py-3"><Badge tone={u.is_active ? 'green' : 'gray'}>{u.pending_invitation ? 'دعوة معلّقة' : u.is_active ? 'نشط' : 'معطّل'}</Badge></td>
               <td className="px-3 py-3 text-[12px] text-[#657381]">{u.created_at?.slice(0, 10)}</td>
