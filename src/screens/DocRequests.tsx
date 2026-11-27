@@ -1,7 +1,7 @@
 import { useState, type ComponentProps, type FormEvent } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { DOCUMENT_TYPES, downloadDocument, listDocRequests, listTherapistNames, requestDocument, reviewDocument } from '../services/data'
+import { DOCUMENT_TYPES, downloadDocument, listDocRequests, listDocumentRecipients, requestDocument, reviewDocument } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
@@ -110,7 +110,7 @@ function RequestForm({ busy, cancel, submit }: {
   cancel: () => void
   submit: (userId: string, type: keyof typeof DOCUMENT_TYPES, reason?: string) => void
 }) {
-  const { data, loading, error, reload } = useAsync(listTherapistNames, [], { interval: 0 })
+  const { data, loading, error, reload } = useAsync(listDocumentRecipients, [], { interval: 0 })
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const fields = new FormData(event.currentTarget)
@@ -128,7 +128,7 @@ function RequestForm({ busy, cancel, submit }: {
         <label className="block text-sm">المعالج
           <select required name="therapist" disabled={loading || !!error || busy} className="mt-1 w-full rounded-xl border border-line-strong p-2">
             <option value="">اختر معالجًا</option>
-            {data?.map(therapist => <option key={therapist.id} value={therapist.id}>{therapist.name}</option>)}
+            {data?.map(therapist => <option key={therapist.id} value={therapist.id}>{therapist.label}</option>)}
           </select>
         </label>
         <label className="block text-sm">نوع المستند

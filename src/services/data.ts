@@ -204,9 +204,28 @@ export async function listTherapists(f: Parameters<typeof adminApi.therapists>[0
   }
 }
 
+const listTherapistDirectory = () =>
+  API_MOCK ? wait(mock.therapists) : fetchPages(page => listTherapists({ page }))
+
 export const listTherapistNames = () =>
-  (API_MOCK ? wait(mock.therapists) : fetchPages(page => listTherapists({ page })))
+  listTherapistDirectory()
     .then(rows => rows.map(({ id, full_name }) => ({ id, name: full_name })))
+
+export async function listDocumentRecipients() {
+  const rows = await listTherapistDirectory()
+  const used = new Set<string>()
+  return rows.map(({ id, full_name, application_ref, whatsapp_number }) => {
+    const reference = application_ref?.trim()
+    const digits = whatsapp_number?.replace(/\D/g, '') ?? ''
+    const base = reference ? `${full_name} — رقم الطلب: ${reference}`
+      : digits.length >= 4 ? `${full_name} — واتساب: ••••${digits.slice(-4)}`
+      : full_name
+    let label = base
+    for (let index = 2; used.has(label); index++) label = `${base} (${index})`
+    used.add(label)
+    return { id, label }
+  })
+}
 
 function getMockTherapist(id: string): ApiAdminTherapistDetail {
   const row = mock.therapists.find(t => t.id === id)
