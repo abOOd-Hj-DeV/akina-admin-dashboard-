@@ -26,6 +26,8 @@ const pending = {
   role: 'support_agent',
   is_active: true,
   pending_invitation: true,
+  allowed_staff_actions: ['resend_invite', 'cancel_invite'],
+  invitation: { retry_after: 0, resend_available_at: '2026-04-01T00:01:00Z', code_usable: true },
   created_at: '2026-04-01',
 }
 const accepted = { ...pending, pending_invitation: false }
@@ -59,6 +61,29 @@ it('refreshes pending invitations automatically', async () => {
   expect(view.container.textContent).not.toContain('دعوة معلّقة')
   expect(adminApi.users).toHaveBeenCalledTimes(2)
   await view.unmount()
+})
+
+it('rechecks the row at the advertised boundary and never resends an invitation accepted elsewhere', async () => {
+  adminApi.users.mockReset()
+    .mockResolvedValueOnce({ data: [{ ...pending, allowed_staff_actions: ['cancel_invite'], invitation: { ...pending.invitation, retry_after: 1 } }], last_page: 1 })
+    .mockResolvedValueOnce({ data: [{ ...accepted, allowed_staff_actions: ['deactivate'], invitation: null }], last_page: 1 })
+  adminApi.resendInvitation.mockClear()
+  const { default: Users } = await import('./Users')
+  const view = mount()
+  try {
+    await view.render(<MemoryRouter><Users /></MemoryRouter>)
+    expect(view.container.textContent).toContain('يمكن إعادة الدعوة بعد')
+    expect([...view.container.querySelectorAll('button')].some((button) => button.textContent === 'إعادة الدعوة')).toBe(false)
+    await act(async () => { await vi.advanceTimersByTimeAsync(999) })
+    expect(adminApi.users).toHaveBeenCalledTimes(1)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+    expect(adminApi.users).toHaveBeenCalledTimes(2)
+    expect(view.container.textContent).not.toContain('يمكن إعادة الدعوة بعد')
+    expect(view.container.textContent).toContain('تعطيل')
+    expect(adminApi.resendInvitation).not.toHaveBeenCalled()
+  } finally {
+    await view.unmount()
+  }
 })
 
 it('renders only server-authorized staff status actions and reloads a stale row after refusal', async () => {

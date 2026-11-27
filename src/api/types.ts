@@ -286,7 +286,8 @@ export interface ApiAdminUser {
   is_active: boolean
   activated?: boolean
   pending_invitation?: boolean
-  allowed_staff_actions?: ('deactivate' | 'reactivate')[]
+  allowed_staff_actions?: ('deactivate' | 'reactivate' | 'resend_invite' | 'cancel_invite')[]
+  invitation?: { retry_after: number; resend_available_at: string; code_usable: boolean } | null
   last_login?: string | null
   created_at: string
 }

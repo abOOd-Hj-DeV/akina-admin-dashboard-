@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { access, INVITABLE_STAFF_ROLES, ROLE_LABELS } from '../auth/permissions'
@@ -29,7 +29,7 @@ export default function Users() {
   const canEdit = a.level === 'full' && staffRoles.length > 0
   const [page, setPage] = useState(1)
   const [revision, setRevision] = useState(0)
-  const { data, loading, error, reload: refresh } = useAsync(
+  const { data, loading, refreshing, error, reload: refresh } = useAsync(
     () => (API_MOCK ? Promise.resolve({ data: MOCK_USERS, last_page: 1 }) : adminApi.users({ page })),
     [page, revision],
   )
@@ -40,12 +40,20 @@ export default function Users() {
   const [working, setWorking] = useState(false)
   const [adding, setAdding] = useState(false)
 
-  const canManage = (u: ApiAdminUser) => u.role !== 'therapist' && canEdit && (
-    role === 'super_admin' || (role === 'admin' && u.role !== 'super_admin' && u.role !== 'admin')
-  )
+  useEffect(() => {
+    const waits = data?.data.map((user) => user.invitation?.retry_after).filter((wait): wait is number =>
+      typeof wait === 'number' && Number.isFinite(wait) && wait > 0)
+    if (!waits?.length) return
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState === 'visible') void refresh()
+    }, Math.min(...waits) * 1000)
+    return () => window.clearTimeout(timer)
+  }, [data, refresh])
+
+  const actionsBlocked = working || loading || refreshing || error !== null
 
   const toggle = async (u: ApiAdminUser) => {
-    if (working || !u.allowed_staff_actions?.includes(u.is_active ? 'deactivate' : 'reactivate')) return
+    if (actionsBlocked || !u.allowed_staff_actions?.includes(u.is_active ? 'deactivate' : 'reactivate')) return
     setWorking(true)
     setErr(null)
     setNotice(null)
@@ -59,7 +67,7 @@ export default function Users() {
     }
   }
   const manageInvitation = async (u: ApiAdminUser, kind: 'cancel' | 'resend') => {
-    if (!canManage(u) || !u.pending_invitation || working) return
+    if (!u.pending_invitation || actionsBlocked || !u.allowed_staff_actions?.includes(kind === 'cancel' ? 'cancel_invite' : 'resend_invite')) return
     if (kind === 'cancel' && !window.confirm(`إلغاء دعوة ${u.name}؟ سيُحذف الحساب المعلّق ويصبح الرقم والبريد متاحين لدعوة جديدة.`)) return
     setWorking(true)
     setErr(null)
@@ -74,6 +82,7 @@ export default function Users() {
       else reload()
     } catch (e) {
       setErr(describeAuthError(e, kind === 'cancel' ? 'تعذّر إلغاء الدعوة.' : 'تعذّر إعادة إرسال الدعوة.').message)
+      reload()
     } finally {
       setWorking(false)
     }
@@ -88,7 +97,7 @@ export default function Users() {
       />
       {err && <p role="alert" className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-[13px] text-red-700">{err}</p>}
       {notice && <p role="status">{notice}</p>}
-      {working && <p role="status">جارٍ تحديث الدعوة…</p>}
+      {working && <p role="status">جارٍ تحديث الحساب…</p>}
       <DataState loading={loading} error={error} hasData={data !== undefined} empty={data !== undefined && users.length === 0} onRetry={refresh} />
       {adding && (
         <InviteUserForm roles={staffRoles} onCancel={() => setAdding(false)} onDone={() => { setAdding(false); setPage(1); reload() }} />
@@ -113,13 +122,16 @@ export default function Users() {
                 )}
                 {u.role !== 'therapist' && (
                   <div className="flex gap-1.5">
-                    {u.pending_invitation && canManage(u) ? (
+                    {u.pending_invitation ? (
                       <>
-                        <Btn tone="ghost" disabled={working || loading} onClick={() => void manageInvitation(u, 'resend')}>إعادة الدعوة</Btn>
-                        <Btn tone="danger-soft" disabled={working || loading} onClick={() => void manageInvitation(u, 'cancel')}>إلغاء الدعوة</Btn>
+                        {u.invitation?.code_usable === false && <span>الرمز الحالي غير صالح</span>}
+                        {(u.invitation?.retry_after ?? 0) > 0
+                          ? <span>يمكن إعادة الدعوة بعد {formatAdminDate(u.invitation?.resend_available_at)}</span>
+                          : u.allowed_staff_actions?.includes('resend_invite') && <Btn tone="ghost" disabled={actionsBlocked} onClick={() => void manageInvitation(u, 'resend')}>إعادة الدعوة</Btn>}
+                        {u.allowed_staff_actions?.includes('cancel_invite') && <Btn tone="danger-soft" disabled={actionsBlocked} onClick={() => void manageInvitation(u, 'cancel')}>إلغاء الدعوة</Btn>}
                       </>
                     ) : u.allowed_staff_actions?.includes(u.is_active ? 'deactivate' : 'reactivate') && (
-                      <Btn tone={u.is_active ? 'danger-soft' : 'outline'} disabled={working || loading} className="px-3 py-1.5 text-[12px]" onClick={() => void toggle(u)}>
+                      <Btn tone={u.is_active ? 'danger-soft' : 'outline'} disabled={actionsBlocked} className="px-3 py-1.5 text-[12px]" onClick={() => void toggle(u)}>
                         {u.is_active ? 'تعطيل' : 'تفعيل'}
                       </Btn>
                     )}
