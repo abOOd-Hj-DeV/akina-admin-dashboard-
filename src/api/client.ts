@@ -64,8 +64,10 @@ export class ApiError extends Error {
 }
 
 export class MutationOutcomeUnknown extends ApiError {
-  constructor(status: number, readonly retry: () => Promise<unknown>) {
+  readonly retry: () => Promise<unknown>
+  constructor(status: number, retry: () => Promise<unknown>) {
     super(status, 'لم يتأكد تنفيذ العملية. تحقق من الحالة قبل إرسال طلب جديد.', undefined, 'mutation_outcome_unknown')
+    this.retry = retry
   }
 }
 
