@@ -10,6 +10,7 @@ const ADMIN_ROLES = new Set<ApiRole>([
 
 interface AuthState {
   role: Role | null
+  userId: string | null
   /** اسم المستخدم المعروض في بطاقة الملف الشخصي */
   userName: string | null
   /** false أثناء استعادة الجلسة من توكن التجديد عند تحميل الصفحة */
@@ -28,7 +29,7 @@ interface AuthState {
 }
 
 const Ctx = createContext<AuthState>({
-  role: null, userName: null, ready: true, login: () => {}, apiLogin: async () => 'admin', apiVerify2fa: async () => 'admin',
+  role: null, userId: null, userName: null, ready: true, login: () => {}, apiLogin: async () => 'admin', apiVerify2fa: async () => 'admin',
   apiResend2fa: async () => {}, logout: () => {}, logoutAll: async () => {},
 })
 
@@ -41,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // الوضع الحي: الدور يُستعاد من الخادم فقط (لا نثق بقيمة مخزّنة بدون توكن)
   const [role, setRole] = useState<Role | null>(() => (API_MOCK ? (sessionStorage.getItem('sakina-role') as Role) || null : null))
   const [userName, setUserName] = useState<string | null>(() => (API_MOCK ? sessionStorage.getItem('sakina-user-name') : null))
+  const [userId, setUserId] = useState<string | null>(null)
   const [ready, setReady] = useState<boolean>(() => API_MOCK || !tokenStore.getRefresh())
 
   const applyUser = (user: ApiUser): Role => {
@@ -52,11 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem('sakina-role', r)
     sessionStorage.setItem('sakina-user-name', user.name)
     setUserName(user.name)
+    setUserId(user.id)
     setRole(r)
     return r
   }
 
-  const reset = () => { clearSessionKeys(); setRole(null); setUserName(null) }
+  const reset = () => { clearSessionKeys(); setRole(null); setUserId(null); setUserName(null) }
 
   useEffect(() => {
     if (API_MOCK) return
@@ -85,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem('sakina-role', r)
     sessionStorage.removeItem('sakina-user-name')
     setUserName(null)
+    setUserId(null)
     setRole(r)
   }
 
@@ -127,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ role, userName, ready, login, apiLogin, apiVerify2fa, apiResend2fa, logout, logoutAll }}>
+    <Ctx.Provider value={{ role, userId, userName, ready, login, apiLogin, apiVerify2fa, apiResend2fa, logout, logoutAll }}>
       {children}
     </Ctx.Provider>
   )

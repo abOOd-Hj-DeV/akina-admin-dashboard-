@@ -118,7 +118,8 @@ export interface ApiRedFlagStats {
 export type ApiRedFlagCounts = Record<'open' | 'resolved', Record<ApiRedFlag['priority'], number>>
 
 export type TherapistApproval = 'pending' | 'approved' | 'rejected'
-export type TherapistFilter = 'all' | 'not_submitted' | 'changes_pending' | TherapistApproval
+export type TherapistLifecycle = 'invited' | 'awaiting_profile' | 'pending_review' | 'needs_changes' | 'approved' | 'update_pending' | 'suspended'
+export type TherapistActionCode = 'resend_invite' | 'cancel_invite' | 'approve' | 'reject' | 'suspend' | 'reactivate'
 
 export interface TherapistProfile {
   full_name: string | null
@@ -146,6 +147,8 @@ export interface TherapistRevision extends TherapistRevisionSummary {
   status: 'pending' | 'approved' | 'rejected' | 'superseded'
   data: TherapistProfile
   changes?: TherapistProfileChanges
+  review_note?: string | null
+  reviewed_at?: string | null
 }
 
 export interface TherapistLastReview {
@@ -160,7 +163,11 @@ export interface ApiAdminTherapist extends TherapistProfile {
   id: string
   full_name: string
   application_ref: string | null
-  has_license: boolean
+  lifecycle_state?: string | null
+  allowed_actions?: string[] | null
+  review_count: number
+  activated?: boolean | null
+  phone_verified_at?: string | null
   pending_revision: TherapistRevisionSummary | null
   rating: number | string | null
   approval_status: TherapistApproval | null
@@ -179,6 +186,7 @@ export interface ApiAdminTherapistDetail extends ApiAdminTherapist {
   published: TherapistProfile
   pending_revision: TherapistRevision | null
   last_review: TherapistLastReview | null
+  last_rejected_revision?: TherapistRevision | null
 }
 
 export interface TherapistOption {
@@ -209,8 +217,6 @@ export interface ApiSupportTicket {
 }
 
 /** DocumentRequestService::toArray (staff view) */
-export type DocumentType = 'license' | 'identity' | 'certificate' | 'payment_proof' | 'support_file' | 'other'
-
 export interface ApiDocument {
   id: string
   doc_type: string

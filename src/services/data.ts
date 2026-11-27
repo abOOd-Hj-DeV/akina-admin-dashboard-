@@ -10,7 +10,7 @@ import { adminApi } from '../api/admin'
 import type {
   ApiAdminPatient, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAuditEntry, ApiDocument,
   ApiFaq, ApiOverview, ApiPayment, ApiProgram, ApiRedFlag, ApiSupportTicket, ApiWithdrawal,
-  CreateUserBody,
+  CreateUserBody, TherapistActionCode,
 } from '../api/types'
 import type {
   AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Ticket,
@@ -171,17 +171,15 @@ export const listPatients = (f?: Parameters<typeof adminApi.patients>[0]) =>
 
 export async function listTherapists(f: Parameters<typeof adminApi.therapists>[0]) {
   if (!API_MOCK) return adminApi.therapists(f)
-  const { status, q, page, per_page = 15 } = f
+  const { lifecycle_state, q, page, per_page = 15 } = f
   const query = q?.trim().toLowerCase()
   const rows = mock.therapists.filter(t => {
-    const matchesStatus = status === 'changes_pending'
-      ? t.approval_status === 'approved' && t.pending_revision?.kind === 'update'
-      : status === 'all' || (t.approval_status ?? 'not_submitted') === status
+    const matchesStatus = !lifecycle_state || t.lifecycle_state === lifecycle_state
     return matchesStatus && (!query || t.application_ref?.toLowerCase() === query
       || t.full_name.toLowerCase().includes(query) || t.whatsapp_number?.includes(query))
   })
   const data = rows.slice((page - 1) * per_page, page * per_page)
-    .map(({ published: _published, last_review: _lastReview, pending_revision: revision, ...row }): ApiAdminTherapist => ({
+    .map(({ published: _published, last_review: _lastReview, last_rejected_revision: _rejected, pending_revision: revision, ...row }): ApiAdminTherapist => ({
       ...row,
       pending_revision: revision ? { id: revision.id, kind: revision.kind, submitted_at: revision.submitted_at } : null,
     }))
@@ -192,7 +190,7 @@ export async function listTherapists(f: Parameters<typeof adminApi.therapists>[0
 }
 
 export const listTherapistNames = () =>
-  (API_MOCK ? wait(mock.therapists) : fetchPages(page => listTherapists({ status: 'all', page })))
+  (API_MOCK ? wait(mock.therapists) : fetchPages(page => listTherapists({ page })))
     .then(rows => rows.map(({ id, full_name }) => ({ id, name: full_name })))
 
 function getMockTherapist(id: string): ApiAdminTherapistDetail {
@@ -210,13 +208,6 @@ export async function getTherapistOptions() {
     catch { return THERAPIST_OPTIONS }
   }
   return THERAPIST_OPTIONS
-}
-
-export async function getTherapistLicense(id: string) {
-  if (!API_MOCK) return adminApi.therapistLicense(id)
-  if (!getMockTherapist(id).has_license) throw new ApiError(404, 'الرخصة غير متاحة.')
-  const png = 'iVBORw0KGgoAAAANSUhEUgAAAFAAAAAkAQAAAAA22YDXAAAAQklEQVR42mNgQID6/1DwjwkhODiY/+W5LihARS98+H8ByuRg+M8BU8v4AK5NAWHCAzjzB8PBH1CmgSCjwWDxMRIAAEZPHuV69ABjAAAAAElFTkSuQmCC'
-  return new Blob([Uint8Array.from(atob(png), c => c.charCodeAt(0))], { type: 'image/png' })
 }
 
 export const listPayments = () =>
@@ -298,33 +289,47 @@ export async function decideTherapist(id: string, revision_id: string, action: '
   if (revision?.id !== revision_id) throw new ApiError(404, '')
   if (revision.status === 'superseded') throw new ApiError(409, '', undefined, 'revision_superseded')
   if (revision.status !== 'pending') throw new ApiError(409, '', undefined, 'already_decided')
+  requireMockAction(row, action)
   const approved = action === 'approve'
   const published = approved ? revision.data : row.published
   if (approved && published.email && mock.therapists.some(t => t.id !== id && t.email?.toLowerCase() === published.email?.toLowerCase())) {
     throw new ApiError(422, '', { email: ['البريد الإلكتروني مستخدم.'] })
   }
   const status = approved ? 'approved' : 'rejected'
+  const lifecycle = approved || revision.kind === 'update' ? 'approved' : 'needs_changes'
+  const reviewed_at = new Date().toISOString()
   mock.therapists[mock.therapists.indexOf(row)] = {
     ...row, ...published, published, full_name: published.full_name ?? row.full_name, pending_revision: null,
     approval_status: revision.kind === 'initial' ? status : row.approval_status,
     approval_note: revision.kind === 'initial' ? (approved ? null : note) : row.approval_note,
-    last_review: { revision_id, kind: revision.kind, status, note: note || null, reviewed_at: new Date().toISOString() },
+    lifecycle_state: lifecycle, allowed_actions: mock.mockLifecycleActions[lifecycle],
+    last_review: { revision_id, kind: revision.kind, status, note: note || null, reviewed_at },
+    last_rejected_revision: approved ? row.last_rejected_revision : { ...revision, status, review_note: note, reviewed_at },
   }
 }
 
 export async function setTherapistActive(id: string, active: boolean) {
   if (!API_MOCK) return adminApi.setUserActive(id, active)
   const row = getMockTherapist(id)
-  mock.therapists[mock.therapists.indexOf(row)] = { ...row, is_active: active }
+  requireMockAction(row, active ? 'reactivate' : 'suspend')
+  const lifecycle = !active ? 'suspended' : row.pending_revision
+    ? row.pending_revision.kind === 'update' ? 'update_pending' : 'pending_review'
+    : row.approval_status === 'approved' ? 'approved'
+      : row.approval_status === 'rejected' ? 'needs_changes' : 'awaiting_profile'
+  mock.therapists[mock.therapists.indexOf(row)] = {
+    ...row, is_active: active, lifecycle_state: lifecycle, allowed_actions: mock.mockLifecycleActions[lifecycle],
+  }
 }
 
-export async function requestTherapistDocument(body: Parameters<typeof adminApi.requestDocument>[0]) {
-  if (!API_MOCK) return adminApi.requestDocument(body)
-  const row = getMockTherapist(body.user_id)
-  mock.docRequests.unshift({
-    id: crypto.randomUUID(), subject: DOCUMENT_TYPES[body.doc_type], reason: body.reason ?? '',
-    requestedBy: row.full_name, date: new Date().toISOString(), status: 'قيد المراجعة',
-  })
+function requireMockAction(row: ApiAdminTherapist, action: TherapistActionCode) {
+  if (!row.allowed_actions?.includes(action)) throw new ApiError(409, '', undefined, 'action_not_allowed')
+}
+
+export async function manageTherapistInvitation(id: string, action: 'resend_invite' | 'cancel_invite') {
+  if (!API_MOCK) return action === 'resend_invite' ? adminApi.resendInvitation(id) : adminApi.cancelInvitation(id)
+  const row = getMockTherapist(id)
+  requireMockAction(row, action)
+  if (action === 'cancel_invite') mock.therapists.splice(mock.therapists.indexOf(row), 1)
 }
 
 export async function inviteUser(body: CreateUserBody) {
@@ -336,7 +341,7 @@ export async function inviteUser(body: CreateUserBody) {
     }
     mock.therapists.unshift(mock.mockTherapist({
       id: crypto.randomUUID(), full_name: body.name, approval_status: null, created_at: new Date().toISOString(),
-      whatsapp_number: body.whatsapp_number, application_ref, is_active: false, availability: [],
+      whatsapp_number: body.whatsapp_number, application_ref, lifecycle_state: 'invited', is_active: false, availability: [],
     }))
   }
 }

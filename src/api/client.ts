@@ -67,13 +67,13 @@ export interface LaravelPaginator<T> {
 interface TokenPair { access_token: string; refresh_token: string }
 
 /** يرسل الطلب ويقرأ الجسم ضمن نفس المهلة (رؤوس سريعة + جسم متوقف = timeout) */
-async function send(method: string, path: string, headers: Record<string, string>, body?: BodyInit, asBlob = false): Promise<{ res: Response; json: unknown }> {
+async function send(method: string, path: string, headers: Record<string, string>, body?: BodyInit): Promise<{ res: Response; json: unknown }> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS)
   const timeout = () => new ApiError(0, 'انتهت مهلة الاتصال بالخادم. حاول مرة أخرى.', undefined, 'timeout')
   try {
-    const res = await fetch(`${API_URL}${path}`, { method, headers, body, signal: ctrl.signal, ...(asBlob ? { cache: 'no-store' } : {}) })
-    const json = res.status === 204 ? null : asBlob && res.ok ? await res.blob() : await res.json().catch(() => null)
+    const res = await fetch(`${API_URL}${path}`, { method, headers, body, signal: ctrl.signal })
+    const json = res.status === 204 ? null : await res.json().catch(() => null)
     if (ctrl.signal.aborted) throw timeout()
     return { res, json }
   } catch (e) {
@@ -123,7 +123,7 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  opts: { idempotency?: boolean; form?: FormData; blob?: boolean } = {},
+  opts: { idempotency?: boolean; form?: FormData } = {},
   retried = false,
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
@@ -136,7 +136,7 @@ async function request<T>(
     headers['Content-Type'] = 'application/json'
     payload = JSON.stringify(body)
   }
-  const { res, json } = await send(method, path, headers, payload, opts.blob)
+  const { res, json } = await send(method, path, headers, payload)
   if (!res.ok) {
     if (res.status === 401 && !NO_RETRY.test(path)) {
       if (!retried && tokenStore.getRefresh() && (await refreshSession())) {
@@ -152,7 +152,6 @@ async function request<T>(
 
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
-  getBlob: (path: string) => request<Blob>('GET', path, undefined, { blob: true }),
   post: <T>(path: string, body?: unknown, idempotent = true) =>
     request<T>('POST', path, body, { idempotency: idempotent }),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),

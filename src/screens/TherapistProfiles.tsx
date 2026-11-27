@@ -1,4 +1,5 @@
 import type { TherapistOptions, TherapistProfile, TherapistRevision } from '../api/types'
+import { Badge, Card } from '../components/ui'
 import { therapistDate } from '../lib/therapists'
 
 const profileFields: [keyof TherapistProfile, string][] = [
@@ -21,8 +22,8 @@ function ProfileFields({ profile, options }: { profile: TherapistProfile; option
   return (
     <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
       {profileFields.map(([field, label]) => (
-        <div key={field} className={`min-w-0 rounded-xl bg-gray-50 p-2 ${field === 'bio' ? 'sm:col-span-2' : ''}`}>
-          <dt className="font-semibold text-[#657381]">{label}</dt>
+        <div key={field} className={`min-w-0 rounded-xl bg-bg p-2 ${field === 'bio' ? 'sm:col-span-2' : ''}`}>
+          <dt className="font-semibold text-muted">{label}</dt>
           <dd className="break-words whitespace-pre-wrap" dir="auto">{formatValue(field, profile[field], options)}</dd>
         </div>
       ))}
@@ -42,18 +43,18 @@ function ProfileComparison({ published, revision, options }: {
         const changed = revision.changes ? !!change : JSON.stringify(oldValue) !== JSON.stringify(newValue)
         return (
           <div key={field} data-changed={changed || undefined} className={`rounded-xl border p-2 ${changed
-            ? 'border-amber-300 bg-amber-50' : 'border-[#ebebeb] bg-gray-50'}`}>
+            ? 'border-tint-3 bg-tint-4' : 'border-line-strong bg-bg'}`}>
             <dt className="flex flex-wrap items-center gap-2 font-semibold">
               {label}
-              {changed && <span className="rounded-full bg-amber-100 px-2 text-xs text-amber-900">تم التعديل</span>}
+              {changed && <Badge tone="blue">تم التعديل</Badge>}
             </dt>
             <dd className="mt-1 grid grid-cols-2 gap-2">
               <div className="min-w-0 break-words whitespace-pre-wrap">
-                <span className="block text-xs text-[#657381]">القيمة المنشورة</span>
+                <span className="block text-xs text-muted">القيمة المنشورة</span>
                 <div dir="auto">{formatValue(field, oldValue, options)}</div>
               </div>
               <div className="min-w-0 break-words whitespace-pre-wrap">
-                <span className="block text-xs text-[#657381]">القيمة المقترحة</span>
+                <span className="block text-xs text-muted">القيمة المقترحة</span>
                 <div dir="auto">{formatValue(field, newValue, options)}</div>
               </div>
             </dd>
@@ -64,25 +65,29 @@ function ProfileComparison({ published, revision, options }: {
   )
 }
 
-export function TherapistProfiles({ published, isPublished, revision, options }: {
-  published: TherapistProfile; isPublished: boolean; revision: TherapistRevision | null; options: TherapistOptions
+export function TherapistProfiles({ published, revision, rejected, reason, options, actions }: {
+  published: TherapistProfile | null; revision: TherapistRevision | null; rejected?: TherapistRevision | null
+  reason?: string | null; options: TherapistOptions; actions: React.ReactNode
 }) {
   return (
     <>
-      <section className="mt-4">
-        <h3 className="mb-2 font-bold">{isPublished ? 'الملف المهني المنشور' : 'بيانات الملف الحالية (غير منشورة)'}</h3>
+      {revision && <Card>
+        <h3 className="font-bold">{revision.kind === 'update' ? 'تعديلات بانتظار المراجعة' : 'ملف مهني بانتظار المراجعة'}</h3>
+        <p className="mb-2 text-sm text-muted">تاريخ الإرسال: {therapistDate(revision.submitted_at)}</p>
+        {revision.kind === 'update' && published ? <ProfileComparison published={published} revision={revision} options={options} />
+          : <ProfileFields profile={revision.data} options={options} />}
+        {actions}
+      </Card>}
+      {published && revision?.kind !== 'update' && <Card>
+        <h3 className="mb-2 font-bold">الملف المهني المنشور</h3>
         <ProfileFields profile={published} options={options} />
-      </section>
-      <section className="mt-4">
-        {revision ? (
-          <>
-            <h3 className="font-bold">{revision.kind === 'update' ? 'تعديلات بانتظار المراجعة' : 'ملف مهني بانتظار المراجعة'}</h3>
-            <p className="mb-2 text-sm text-[#657381]">تاريخ الإرسال: {therapistDate(revision.submitted_at)}</p>
-            {revision.kind === 'update' ? <ProfileComparison published={published} revision={revision} options={options} />
-              : <ProfileFields profile={revision.data} options={options} />}
-          </>
-        ) : <p className="text-sm text-[#657381]">لا يوجد ملف مهني بانتظار المراجعة.</p>}
-      </section>
+      </Card>}
+      {(rejected || reason) && <Card>
+        <h3 className="mb-2 font-bold">{rejected ? 'آخر نسخة مرفوضة' : 'آخر رفض'}</h3>
+        {reason && <p className="mb-2 whitespace-pre-wrap break-words text-sm">سبب الرفض: {reason}</p>}
+        {rejected?.reviewed_at && <p className="mb-2 text-sm text-muted">تاريخ المراجعة: {therapistDate(rejected.reviewed_at)}</p>}
+        {rejected && <ProfileFields profile={rejected.data} options={options} />}
+      </Card>}
     </>
   )
 }

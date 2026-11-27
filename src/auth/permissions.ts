@@ -116,5 +116,3 @@ export const THERAPIST_INVITERS: Role[] = ['super_admin', 'admin', 'clinical_sup
 export const canInviteTherapist = (role: Role | null | undefined) => !!role && THERAPIST_INVITERS.includes(role)
 
 export const canDecideTherapist = (role: Role | null) => role === 'super_admin' || role === 'clinical_supervisor'
-export const canToggleTherapist = canDecideTherapist
-export const canRequestTherapistDocument = (role: Role | null) => role === 'super_admin'
