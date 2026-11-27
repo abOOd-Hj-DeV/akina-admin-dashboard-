@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
 import { activityFeed, countOpenRedFlags, getOverview, listDocRequests, listPayments, listTickets, listWithdrawals } from '../services/data'
@@ -94,7 +95,29 @@ export default function Dashboard() {
   ]
   const can = (s: Parameters<typeof access>[1]) => role && access(role, s).level !== 'denied'
   const actions = ACTIONS.filter((a) => can(a.to.slice(1) as never))
-  const pendingEarnings = withdrawals.filter((w) => w.status === 'pending').reduce((s, w) => s + w.amount, 0)
+  const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number } | null>(null)
+  useEffect(() => {
+    const updateCalendarMonth = () => {
+      const now = new Date()
+      const next = { year: now.getFullYear(), month: now.getMonth() }
+      setCalendarMonth((current) =>
+        current?.year === next.year && current.month === next.month ? current : next,
+      )
+    }
+    updateCalendarMonth()
+    const timer = window.setInterval(updateCalendarMonth, 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const pendingEarnings = withdrawals
+    .filter((withdrawal) => {
+      const date = new Date(withdrawal.date)
+      return withdrawal.status === 'pending'
+        && !Number.isNaN(date.getTime())
+        && calendarMonth !== null
+        && date.getFullYear() === calendarMonth.year
+        && date.getMonth() === calendarMonth.month
+    })
+    .reduce((sum, withdrawal) => sum + withdrawal.amount, 0)
 
   return (
     <>

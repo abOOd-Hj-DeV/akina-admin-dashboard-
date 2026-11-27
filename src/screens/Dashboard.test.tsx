@@ -43,7 +43,7 @@ beforeEach(() => {
   services.activityFeed.mockReset().mockResolvedValue([])
 })
 
-afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals() })
 
 describe('Dashboard data states', () => {
   it('shows an ellipsis while the red-flag count is pending, then an error instead of zero', async () => {
@@ -61,6 +61,24 @@ describe('Dashboard data states', () => {
     expect(view.container.textContent).toContain('حالات الخطر—')
     expect(view.container.textContent).not.toContain('حالات الخطر0')
     expect(view.container.querySelector('[title="تعذّر التحميل"]')).not.toBeNull()
+    await view.unmount()
+  })
+
+  it('counts only pending withdrawals requested in the current month', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-15T12:00:00'))
+    auth.role = 'finance_partner'
+    services.listWithdrawals.mockResolvedValue([
+      { id: 'current', therapist: 'one', amount: 100, status: 'pending', date: '2026-05-01T10:00:00Z' },
+      { id: 'previous', therapist: 'two', amount: 500, status: 'pending', date: '2026-04-15T12:00:00Z' },
+      { id: 'approved', therapist: 'three', amount: 250, status: 'approved', date: '2026-05-10T10:00:00Z' },
+    ])
+    const { default: Dashboard } = await import('./Dashboard')
+    const view = mount()
+    await view.render(<MemoryRouter><Dashboard /></MemoryRouter>)
+
+    expect(view.container.textContent).toContain('100 SR')
+    expect(view.container.textContent).not.toContain('600 SR')
     await view.unmount()
   })
 })
