@@ -37,9 +37,9 @@ export default function Clinical() {
             <span className="mt-1 text-red-500"><Icon name="flag" size={20} /></span>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="text-[16px] font-bold text-[#0a0a0a]">
-                  {f.id} — {full ? `مريض ${f.patientId}` : `${f.patientName} (${f.patientId})`}
-                </span>
+                <h3 className="text-[16px] font-bold text-[#0a0a0a]">
+                  بلاغ سريري — {role === 'super_admin' ? f.patientName : 'مريض'}
+                </h3>
                 <Badge tone={f.level === 'حرج' ? 'red' : f.level === 'عالي' ? 'amber' : f.level === 'تم الحل' ? 'green' : 'blue'}>
                   {f.level}
                 </Badge>
