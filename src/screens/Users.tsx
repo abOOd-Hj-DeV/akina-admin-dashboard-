@@ -10,6 +10,7 @@ import type { Role } from '../types'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, DataState, PageHeader, Table } from '../components/ui'
 import InviteUserForm from '../components/InviteUserForm'
+import { formatAdminDate } from '../lib/format-date'
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
 
@@ -96,7 +97,7 @@ export default function Users() {
               <td className="px-3 py-3">{u.role === 'therapist'
                 ? <span className="text-muted">تُعرض في إدارة المعالجين</span>
                 : <Badge tone={u.is_active ? 'green' : 'gray'}>{u.pending_invitation ? 'دعوة معلّقة' : u.is_active ? 'نشط' : 'معطّل'}</Badge>}</td>
-              <td className="px-3 py-3 text-[12px] text-[#657381]">{u.created_at?.slice(0, 10)}</td>
+              <td className="px-3 py-3 text-[12px] text-[#657381]">{formatAdminDate(u.created_at)}</td>
               <td className="px-3 py-3">
                 {u.role === 'therapist' && role && access(role, 'therapists').level !== 'denied' && (
                   <Link to={`/therapists?${new URLSearchParams({ therapist: u.id })}`} className="soft-button">

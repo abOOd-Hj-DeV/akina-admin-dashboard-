@@ -5,6 +5,7 @@ import { listPatients, listTherapistNames } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Card, Chip, DataState, DataValue, PageHeader, ProgressBar, SearchBar, Table } from '../components/ui'
 import Icon from '../components/Icon'
+import { formatAdminDate } from '../lib/format-date'
 
 const tName = (ts: { id: string; name: string }[], id: string) => ts.find((t) => t.id === id || t.name === id)?.name ?? (id.startsWith('د.') ? id : '—')
 const statusTone = (s: string) => (s === 'نشط' ? 'green' : s === 'في خطر' ? 'red' : s === 'مجمّد' ? 'gray' : 'amber') as 'green' | 'red' | 'gray' | 'amber'
@@ -72,13 +73,13 @@ export default function Patients() {
                     <td className="px-3 py-3 text-[#657381]">{tName(therapists, p.therapistId)}</td>
                     <td className="px-3 py-3"><Badge tone={statusTone(p.status)}>{p.status}</Badge></td>
                     <td className="px-3 py-3 text-[#657381]">{p.subscription}</td>
-                    <td className="px-3 py-3 text-[#657381]">{p.lastActivity}</td>
+                    <td className="px-3 py-3 text-[#657381]">{formatAdminDate(p.lastActivity)}</td>
                   </>
                 )}
                 {statusOnly && (
                   <>
                     <td className="px-3 py-3"><Badge tone={statusTone(p.status)}>{p.status}</Badge></td>
-                    <td className="px-3 py-3 text-[#657381]">{p.lastActivity}</td>
+                    <td className="px-3 py-3 text-[#657381]">{formatAdminDate(p.lastActivity)}</td>
                   </>
                 )}
                 <td className="px-3 py-3">

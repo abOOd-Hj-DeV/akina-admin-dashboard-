@@ -7,6 +7,7 @@ import { useAsync } from '../hooks/useAsync'
 import { API_MOCK } from '../api/client'
 import { Badge, Btn, Card, DataState, PageHeader, ProgressBar } from '../components/ui'
 import Icon from '../components/Icon'
+import { formatAdminDate } from '../lib/format-date'
 
 const TABS = ['بيانات الحساب', 'المعالج والبرنامج', 'التقدم العلاجي', 'سجل المزاج', 'الجلسات', 'التحذيرات', 'المستندات']
 /** تبويبات سريرية — مخفية عن Admin */
@@ -111,7 +112,7 @@ export default function PatientProfile() {
               <Field k="الاسم" v={anon ? '— (مخفي)' : p.name} />
               <Field k="الحالة" v={p.status} />
               <Field k="الاشتراك" v={p.subscription} />
-              <Field k="آخر نشاط" v={p.lastActivity} />
+              <Field k="آخر نشاط" v={formatAdminDate(p.lastActivity)} />
               <Field k="نسبة الالتزام" v={`${p.compliance}%`} />
             </div>
           )}
@@ -120,7 +121,7 @@ export default function PatientProfile() {
               <Field k="المعالج الحالي" v={therapists.find((t) => t.id === p.therapistId)?.name ?? p.therapistId} />
               {API_MOCK && <Field k="البرنامج" v="برنامج إدارة القلق العام" />}
               {API_MOCK && <Field k="الوحدة الحالية" v="الوحدة 3 — إدارة الأفكار" />}
-              {API_MOCK && <Field k="الجلسة القادمة" v="2025-11-23" />}
+              {API_MOCK && <Field k="الجلسة القادمة" v={formatAdminDate("2025-11-23")} />}
             </div>
           )}
           {tabs[tab] === 'التقدم العلاجي' && (
@@ -149,7 +150,7 @@ export default function PatientProfile() {
               {API_MOCK && sessions.map((s) => (
                 <div key={s.n} className="flex items-center gap-4 rounded-xl bg-[#f7f7f7] px-4 py-3">
                   <span className="font-bold text-[#0a0a0a]">{s.n}</span>
-                  <span className="text-[12px] text-[#657381]">{s.date}</span>
+                  <span className="text-[12px] text-[#657381]">{formatAdminDate(s.date)}</span>
                   <Badge tone={s.status === 'مكتملة' ? 'green' : 'blue'}>{s.status}</Badge>
                   <span className="flex-1 text-[14px] text-[#657381]">{s.notes}</span>
                 </div>
@@ -165,7 +166,7 @@ export default function PatientProfile() {
                     <Icon name="flag" size={14} className="inline" /> {f.id} <Badge tone="red">{f.level}</Badge>
                   </div>
                   <p className="mt-1 text-[14px] text-[#657381]">{f.reason}</p>
-                  <p className="mt-1 text-[12px] text-[#657381]">تم الرصد: {f.detectedAt}</p>
+                  <p className="mt-1 text-[12px] text-[#657381]">تم الرصد: {formatAdminDate(f.detectedAt)}</p>
                 </div>
               ))}
             </div>

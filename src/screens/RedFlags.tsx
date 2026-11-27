@@ -5,7 +5,7 @@ import { decideRedFlag, countOpenRedFlags, listRedFlags } from '../services/data
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Banner, Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
-import { formatRedFlagDate } from '../lib/format-date'
+import { formatAdminDate, localizeAdminTimestamps } from '../lib/format-date'
 import type { RedFlag } from '../types'
 
 const FLAG_LABELS: Record<string, string> = {
@@ -108,7 +108,7 @@ export function RedFlagCard({
             </Badge>
             {flag.onHold && <Badge tone="red">الحساب معلّق</Badge>}
             {flag.reactivationRequestedAt && (
-              <Badge tone="amber">طلب إعادة تفعيل · {formatRedFlagDate(flag.reactivationRequestedAt)}</Badge>
+              <Badge tone="amber">طلب إعادة تفعيل · {formatAdminDate(flag.reactivationRequestedAt)}</Badge>
             )}
           </div>
           <p className="mt-2 text-[14px] text-[#657381]">
@@ -117,10 +117,10 @@ export function RedFlagCard({
             {flag.assessmentScore !== null && <span> · الدرجة: {flag.assessmentScore}</span>}
           </p>
           <p className="mt-1 text-[12px] text-[#657381]">
-            المعالج: {flag.therapistName ?? 'غير معيّن'} · المتابع: {flag.assigneeName ?? '—'} · {formatRedFlagDate(flag.detectedAt)}
+            المعالج: {flag.therapistName ?? 'غير معيّن'} · المتابع: {flag.assigneeName ?? '—'} · {formatAdminDate(flag.detectedAt)}
           </p>
           {flag.actionTaken && (
-            <pre className="mt-3 whitespace-pre-wrap font-sans text-[12px] text-[#657381]">{flag.actionTaken}</pre>
+            <pre className="mt-3 whitespace-pre-wrap font-sans text-[12px] text-[#657381]">{localizeAdminTimestamps(flag.actionTaken)}</pre>
           )}
         </div>
         {full && (

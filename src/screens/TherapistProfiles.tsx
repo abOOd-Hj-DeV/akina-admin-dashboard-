@@ -1,6 +1,6 @@
 import type { TherapistOptions, TherapistProfile, TherapistRevision } from '../api/types'
 import { Badge, Card } from '../components/ui'
-import { therapistDate } from '../lib/therapists'
+import { formatAdminDate } from '../lib/format-date'
 
 const profileFields: [keyof TherapistProfile, string][] = [
   ['full_name', 'الاسم الكامل'], ['job_title', 'المسمّى الوظيفي'], ['specialty', 'التخصص'],
@@ -73,7 +73,7 @@ export function TherapistProfiles({ published, revision, rejected, reason, optio
     <>
       {revision && <Card>
         <h3 className="font-bold">{revision.kind === 'update' ? 'تعديلات بانتظار المراجعة' : 'ملف مهني بانتظار المراجعة'}</h3>
-        <p className="mb-2 text-sm text-muted">تاريخ الإرسال: {therapistDate(revision.submitted_at)}</p>
+        <p className="mb-2 text-sm text-muted">تاريخ الإرسال: {formatAdminDate(revision.submitted_at)}</p>
         {revision.kind === 'update' && published ? <ProfileComparison published={published} revision={revision} options={options} />
           : <ProfileFields profile={revision.data} options={options} />}
         {actions}
@@ -85,7 +85,7 @@ export function TherapistProfiles({ published, revision, rejected, reason, optio
       {(rejected || reason) && <Card>
         <h3 className="mb-2 font-bold">{rejected ? 'آخر نسخة مرفوضة' : 'آخر رفض'}</h3>
         {reason && <p className="mb-2 whitespace-pre-wrap break-words text-sm">سبب الرفض: {reason}</p>}
-        {rejected?.reviewed_at && <p className="mb-2 text-sm text-muted">تاريخ المراجعة: {therapistDate(rejected.reviewed_at)}</p>}
+        {rejected?.reviewed_at && <p className="mb-2 text-sm text-muted">تاريخ المراجعة: {formatAdminDate(rejected.reviewed_at)}</p>}
         {rejected && <ProfileFields profile={rejected.data} options={options} />}
       </Card>}
     </>

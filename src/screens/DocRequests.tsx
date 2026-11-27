@@ -5,6 +5,7 @@ import { listDocRequests, reviewDocument } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { Badge, Btn, Card, DataState, PageHeader } from '../components/ui'
 import Icon from '../components/Icon'
+import { formatAdminDate } from '../lib/format-date'
 
 /** طلبات الملفات: SuperAdmin+Admin كامل، الدعم يرفع للمدير، المشرف قراءة */
 export default function DocRequests() {
@@ -42,7 +43,7 @@ export default function DocRequests() {
                   <Badge tone={st === 'مقبول' ? 'green' : st === 'مرفوض' ? 'red' : st === 'مُرحّل للمدير' ? 'blue' : 'amber'}>{st}</Badge>
                 </div>
                 <p className="mt-1 text-[14px] text-[#657381]">السبب: {d.reason}</p>
-                <p className="mt-1 text-[12px] text-[#657381]">مقدم الطلب: {d.requestedBy} · {d.date}</p>
+                <p className="mt-1 text-[12px] text-[#657381]">مقدم الطلب: {d.requestedBy} · {formatAdminDate(d.date)}</p>
               </div>
               <div className="flex gap-2">
                 <Btn tone="ghost" className="px-3 py-1.5 text-[12px]">عرض الملف</Btn>

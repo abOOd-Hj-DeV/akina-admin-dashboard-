@@ -7,6 +7,7 @@ import { API_MOCK } from '../api/client'
 import { Badge, Btn, Card, DataState, DataValue, PageHeader, StatCard } from '../components/ui'
 import Icon from '../components/Icon'
 import { Link } from 'react-router-dom'
+import { formatAdminDate } from '../lib/format-date'
 
 /** مؤشرات وضع العرض التجريبي فقط — في الوضع الحي تُجلب من /admin/overview */
 const DEMO_KPIS = [
@@ -30,8 +31,6 @@ const ACTIONS: { to: string; label: string; icon: string; primary?: boolean }[] 
   { to: '/therapists', label: 'إدارة المعالجين', icon: 'stetho' },
   { to: '/payments', label: 'مراجعة المدفوعات', icon: 'card' },
 ]
-
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
 export default function Dashboard() {
   const { role } = useAuth()
@@ -126,7 +125,7 @@ export default function Dashboard() {
         sub={API_MOCK
           ? 'عرض تجريبي'
           : overview
-            ? fmtDate(overview.generated_at)
+            ? formatAdminDate(overview.generated_at)
             : overviewState.loading
               ? 'جارٍ التحميل…'
               : overviewState.error
@@ -177,7 +176,7 @@ export default function Dashboard() {
               <div key={i} className="flex items-center gap-3 px-4 py-3.5">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: a.dot }} />
                 <span className="flex-1 text-[14px] text-[#0a0a0a]">{a.text}</span>
-                <span className="text-[12px] text-[#657381]">{a.by} · {a.at}</span>
+                <span className="text-[12px] text-[#657381]">{a.by} · {formatAdminDate(a.at)}</span>
               </div>
             ))}
           </Card>

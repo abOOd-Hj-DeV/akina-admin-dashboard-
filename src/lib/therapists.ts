@@ -50,11 +50,3 @@ export function verificationLabel(row: ApiAdminTherapist) {
   if (row.phone_verified_at !== undefined) return row.phone_verified_at ? 'تم التحقق' : 'لم يتم التحقق'
   return lifecycleOf(row.lifecycle_state) === 'invited' ? 'لم يتم التحقق' : 'حالة التحقق غير متاحة'
 }
-
-const dateFormat = new Intl.DateTimeFormat('ar-SY', { dateStyle: 'medium', timeZone: 'Asia/Damascus' })
-
-export function therapistDate(value: string | null) {
-  if (!value) return '—'
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? '—' : dateFormat.format(date)
-}

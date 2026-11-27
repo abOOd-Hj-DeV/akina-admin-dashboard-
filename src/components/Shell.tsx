@@ -7,6 +7,7 @@ import { adminApi } from '../api/admin'
 import { useAsync } from '../hooks/useAsync'
 import { DataState } from './ui'
 import Icon from './Icon'
+import { formatAdminDate } from '../lib/format-date'
 
 const TITLE_FOR: Record<string, string> = { 'patient-profile': 'ملف المريض', account: 'حسابي' }
 
@@ -25,12 +26,12 @@ export default function Shell() {
   const notifRef = useRef<HTMLDivElement>(null)
   const { data: notificationData, loading: notificationsLoading, error: notificationsError, reload: reloadNotifications } = useAsync(
     () => role
-      ? adminApi.notifications().then((response) => (response.data ?? []) as { title?: string; body?: string; message?: string; is_read?: boolean }[])
+      ? adminApi.notifications().then((response) => (response.data ?? []) as { title?: string; body?: string; message?: string; is_read?: boolean; created_at?: string | null; sent_at?: string | null }[])
       : Promise.resolve([]),
     [role],
   )
   const notifications = notificationData ?? []
-  const notifs = notifications.slice(0, 8).map((n) => ({ title: n.title ?? 'إشعار', body: n.body ?? n.message ?? '' }))
+  const notifs = notifications.slice(0, 8).map((n) => ({ title: n.title ?? 'إشعار', body: n.body ?? n.message ?? '', at: n.sent_at ?? n.created_at }))
   const notifCount = notifications.filter((n) => n.is_read === false).length
 
   useEffect(() => { setMobileNav(false); setNotifOpen(false) }, [pathname])
@@ -147,6 +148,7 @@ export default function Shell() {
                         <li key={i}>
                           <strong>{n.title}</strong>
                           {n.body && <p>{n.body}</p>}
+                          {n.at && <p className="text-xs text-muted">{formatAdminDate(n.at)}</p>}
                         </li>
                       ))}
                     </ul>

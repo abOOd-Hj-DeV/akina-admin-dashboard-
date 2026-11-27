@@ -4,10 +4,11 @@ import type { ApiAdminTherapist, TherapistActionCode, TherapistRevisionSummary }
 import { Badge, Banner, Btn, Card, DataState } from '../components/ui'
 import { THERAPIST_OPTIONS } from '../data/therapistOptions'
 import { useAsync } from '../hooks/useAsync'
-import { allowedTherapistActions, isDecision, lifecycleCopy, THERAPIST_ACTIONS, therapistDate, therapistSnapshot, verificationLabel } from '../lib/therapists'
+import { allowedTherapistActions, isDecision, lifecycleCopy, THERAPIST_ACTIONS, therapistSnapshot, verificationLabel } from '../lib/therapists'
 import { decideTherapist, getTherapist, getTherapistOptions, manageTherapistInvitation, setTherapistActive } from '../services/data'
 import type { Role } from '../types'
 import { TherapistProfiles } from './TherapistProfiles'
+import { formatAdminDate } from '../lib/format-date'
 
 function Modal({ title, busy = false, onClose, children, drawer = false }: {
   title: string; busy?: boolean; onClose: () => void; children: ReactNode; drawer?: boolean
@@ -118,7 +119,7 @@ export function TherapistActionDialog({ action, checking, onClose, onResult }: {
     <Modal title={revision ? `${copy.label} ${revision.kind === 'update' ? 'تعديلات الملف المهني' : 'الملف المهني'}` : copy.label} busy={busy} onClose={onClose}>
       <form className="space-y-3" onSubmit={e => { e.preventDefault(); void submit() }}>
         <p className="text-sm">المعالج: {therapist.full_name}</p>
-        {revision && <p className="text-sm text-muted">تاريخ إرسال النسخة: {therapistDate(revision.submitted_at)}</p>}
+        {revision && <p className="text-sm text-muted">تاريخ إرسال النسخة: {formatAdminDate(revision.submitted_at)}</p>}
         <p className="text-sm">{copy.prompt}</p>
         {revision && <label className="block text-sm">
           {kind === 'reject' ? 'سبب الرفض (مطلوب)' : 'ملاحظة (اختياري)'}
@@ -174,7 +175,7 @@ export function TherapistDetails({ id, role, listRow, listRefreshing, listError,
   const fields: [string, ReactNode][] = details ? [
     ['رقم واتساب', <bdi key="whatsapp">{details.whatsapp_number ?? '—'}</bdi>],
     ['التحقق من واتساب', verificationLabel(details)],
-    ['تاريخ الانضمام', therapistDate(details.created_at)],
+    ['تاريخ الانضمام', formatAdminDate(details.created_at)],
     ['قبول مرضى جدد', details.can_accept_new_clients ? 'نعم' : 'لا'],
     ['أوقات التوفّر', availability(details.availability)],
     ['عدد المرضى', details.clients_count], ['الحد الأقصى للمرضى', details.clients_limit ?? '—'],
@@ -211,6 +212,7 @@ export function TherapistDetails({ id, role, listRow, listRefreshing, listError,
           {approvalNote && <Card>
             <h3 className="mb-2 font-bold">ملاحظة الموافقة</h3>
             <p className="whitespace-pre-wrap break-words text-sm">{approvalNote}</p>
+            <p className="mt-2 text-sm text-muted">تاريخ المراجعة: {formatAdminDate(details.last_review?.reviewed_at)}</p>
           </Card>}
           <Card>
             <h3 className="mb-2 font-bold">بيانات الحساب</h3>
