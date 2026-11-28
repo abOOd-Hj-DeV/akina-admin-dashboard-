@@ -9,6 +9,7 @@ export const API_MOCK: boolean =
 export const REQUEST_TIMEOUT_MS = 60_000
 
 const REFRESH_KEY = 'sakina-refresh'
+const REFRESH_PENDING_KEY = 'sakina-refresh-pending'
 /** مفاتيح localStorage القديمة — تُحذف عند التحميل ولا تُقرأ */
 export const LEGACY_TOKEN_KEYS = ['sakina-token', 'sakina-refresh'] as const
 
@@ -16,17 +17,28 @@ const session = (): Storage | null => (typeof sessionStorage === 'undefined' ? n
 
 // توكن الوصول في الذاكرة فقط؛ توكن التجديد في sessionStorage (يُمسح بإغلاق التبويب)
 let accessToken: string | null = null
+let sessionGeneration = 0
+
+function setTokens(token: string, refresh?: string): void {
+  accessToken = token
+  if (refresh) session()?.setItem(REFRESH_KEY, refresh)
+  else session()?.removeItem(REFRESH_KEY)
+  session()?.removeItem(REFRESH_PENDING_KEY)
+}
 
 export const tokenStore = {
+  generation: () => sessionGeneration,
   get: () => accessToken,
   getRefresh: () => session()?.getItem(REFRESH_KEY) ?? null,
   set: (t: string, refresh?: string) => {
-    accessToken = t
-    if (refresh) session()?.setItem(REFRESH_KEY, refresh)
+    sessionGeneration++
+    setTokens(t, refresh)
   },
   clear: () => {
+    sessionGeneration++
     accessToken = null
     session()?.removeItem(REFRESH_KEY)
+    session()?.removeItem(REFRESH_PENDING_KEY)
   },
 }
 
@@ -49,6 +61,26 @@ export class ApiError extends Error {
     this.code = code
     this.meta = meta
   }
+}
+
+export class MutationOutcomeUnknown extends ApiError {
+  readonly retry: () => Promise<unknown>
+  constructor(status: number, retry: () => Promise<unknown>) {
+    super(status, 'لم يتأكد تنفيذ العملية. تحقق من الحالة قبل إرسال طلب جديد.', undefined, 'mutation_outcome_unknown')
+    this.retry = retry
+  }
+}
+
+export function assertSession(generation: number): void {
+  if (generation !== sessionGeneration) {
+    throw new ApiError(0, 'تغيّرت جلسة تسجيل الدخول.', undefined, 'session_changed')
+  }
+}
+
+export function expireSession(generation: number): void {
+  if (generation !== sessionGeneration) return
+  tokenStore.clear()
+  window.dispatchEvent(new Event('sakina:unauthenticated'))
 }
 
 export interface Page<T> {
@@ -93,31 +125,55 @@ async function toError(res: Response, json: unknown): Promise<ApiError> {
   return new ApiError(res.status, j.message ?? `HTTP ${res.status}`, j.errors, j.code, j.meta)
 }
 
-let refreshing: Promise<boolean> | null = null
+export type Recovery = 'retry' | 'sign_in'
+type RefreshResult = 'refreshed' | 'invalid' | 'stale' | Recovery
+type Rotation = TokenPair | 'invalid' | Recovery
+let refreshing: { generation: number; result: Promise<RefreshResult>; rotation: Promise<Rotation> } | undefined
+
+async function rotateRefreshToken(refresh_token: string): Promise<Rotation> {
+  try {
+    const { res, json: body } = await send('POST', '/api/v1/auth/refresh',
+      { Accept: 'application/json', 'Content-Type': 'application/json' }, JSON.stringify({ refresh_token }))
+    const json = body as TokenPair | null
+    const error = body as { errors?: { refresh_token?: unknown } } | null
+    if ([401, 403].includes(res.status) || (res.status === 422 && error?.errors?.refresh_token)) return 'invalid'
+    if (res.status === 429 && res.headers.has('Retry-After')) return 'retry'
+    if (!res.ok || !json?.access_token || !json.refresh_token) return 'sign_in'
+    return json
+  } catch {
+    return 'sign_in'
+  }
+}
 
 /**
  * يستبدل زوج التوكنات عبر /auth/refresh. طلب واحد فقط في نفس الوقت: توكن التجديد
  * يُستعمل مرة واحدة، وإعادة استخدامه تُعتبر تسريباً فيُلغي الباك اند كل الجلسات.
  */
-export function refreshSession(): Promise<boolean> {
-  if (refreshing) return refreshing
+export function refreshSession(generation = sessionGeneration): Promise<RefreshResult> {
+  if (generation !== sessionGeneration) return Promise.resolve('stale')
+  if (refreshing?.generation === generation) return refreshing.result
   const refresh_token = tokenStore.getRefresh()
-  if (!refresh_token) return Promise.resolve(false)
-  refreshing = (async () => {
+  if (!refresh_token) return Promise.resolve('invalid')
+  if (session()?.getItem(REFRESH_PENDING_KEY)) return Promise.resolve('sign_in')
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve('retry')
+  session()?.setItem(REFRESH_PENDING_KEY, '1')
+  const rotation = rotateRefreshToken(refresh_token)
+  const result = (async (): Promise<RefreshResult> => {
     try {
-      const { res, json: body } = await send('POST', '/api/v1/auth/refresh',
-        { Accept: 'application/json', 'Content-Type': 'application/json' }, JSON.stringify({ refresh_token }))
-      const json = body as TokenPair | null
-      if (!res.ok || !json?.access_token) { tokenStore.clear(); return false }
-      tokenStore.set(json.access_token, json.refresh_token)
-      return true
+      const rotated = await rotation
+      if (generation !== sessionGeneration) return 'stale'
+      if (rotated === 'retry') session()?.removeItem(REFRESH_PENDING_KEY)
+      if (typeof rotated === 'string') return rotated
+      setTokens(rotated.access_token, rotated.refresh_token)
+      return 'refreshed'
     } catch {
-      return false
+      return generation === sessionGeneration ? 'sign_in' : 'stale'
     } finally {
-      refreshing = null
+      if (refreshing?.generation === generation) refreshing = undefined
     }
   })()
-  return refreshing
+  refreshing = { generation, result, rotation }
+  return result
 }
 
 const NO_RETRY = /^\/api\/v1\/auth\/(login|refresh|forgot-password|reset-password|activate|otp)/
@@ -125,40 +181,85 @@ const NO_RETRY = /^\/api\/v1\/auth\/(login|refresh|forgot-password|reset-passwor
 async function request<T>(
   method: string,
   path: string,
-  body?: unknown,
-  opts: { idempotency?: boolean; form?: FormData; binary?: boolean } = {},
+  payload?: string,
+  opts: { key?: string; binary?: boolean } = {},
   retried = false,
+  generation = sessionGeneration,
 ): Promise<T> {
+  assertSession(generation)
   const headers: Record<string, string> = { Accept: 'application/json' }
   const token = tokenStore.get()
   if (token) headers.Authorization = `Bearer ${token}`
-  if (opts.idempotency) headers['Idempotency-Key'] = crypto.randomUUID()
-  let payload: BodyInit | undefined
-  if (opts.form) payload = opts.form
-  else if (body !== undefined) {
-    headers['Content-Type'] = 'application/json'
-    payload = JSON.stringify(body)
-  }
-  const { res, json } = await send(method, path, headers, payload, opts.binary)
+  if (opts.key) headers['Idempotency-Key'] = opts.key
+  if (payload !== undefined) headers['Content-Type'] = 'application/json'
+  const retry = () => request<T>(method, path, payload, opts, false, generation)
+  const { res, json } = await send(method, path, headers, payload, opts.binary).catch((error) => {
+    assertSession(generation)
+    if (opts.key && error instanceof ApiError && error.status === 0) {
+      throw new MutationOutcomeUnknown(error.status, retry)
+    }
+    throw error
+  })
+  assertSession(generation)
   if (!res.ok) {
     if (res.status === 401 && !NO_RETRY.test(path)) {
-      if (!retried && tokenStore.getRefresh() && (await refreshSession())) {
-        return request<T>(method, path, body, opts, true)
+      if (!retried && tokenStore.getRefresh()) {
+        const result = token !== tokenStore.get() ? 'refreshed' : await refreshSession(generation)
+        assertSession(generation)
+        if (result === 'refreshed') {
+          return request<T>(method, path, payload, opts, true, generation)
+        }
+        if (result === 'retry' || result === 'sign_in') {
+          window.dispatchEvent(new CustomEvent<Recovery>('sakina:session-unverified', { detail: result }))
+          throw new ApiError(0, 'تعذّر التحقق من الجلسة.', undefined, 'session_unverified', { recovery: result })
+        }
       }
-      tokenStore.clear()
-      window.dispatchEvent(new Event('sakina:unauthenticated'))
+      expireSession(generation)
     }
-    throw await toError(res, json)
+    const error = await toError(res, json)
+    if (opts.key && res.status >= 500 && error.code !== 'whatsapp_check_unavailable') {
+      throw new MutationOutcomeUnknown(error.status, retry)
+    }
+    throw error
   }
   return json as T
+}
+
+export async function revokeCurrentSession(): Promise<void> {
+  const token = tokenStore.get()
+  const refresh = tokenStore.getRefresh()
+  const pending = refreshing?.generation === sessionGeneration ? refreshing.rotation : undefined
+  const uncertain = session()?.getItem(REFRESH_PENDING_KEY)
+  tokenStore.clear()
+  const signedOutGeneration = sessionGeneration
+  const revoke = async (access: string) => {
+    const { res, json } = await send('POST', '/api/v1/auth/logout', { Accept: 'application/json', Authorization: `Bearer ${access}` })
+    if (!res.ok) throw await toError(res, json)
+  }
+  if (pending) {
+    const rotated = await pending
+    if (typeof rotated !== 'string') return revoke(rotated.access_token)
+  }
+  if (token) {
+    try {
+      return await revoke(token)
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 401 || !refresh || uncertain ||
+          signedOutGeneration !== sessionGeneration || navigator.onLine === false) throw error
+    }
+  }
+  if (!refresh || uncertain || signedOutGeneration !== sessionGeneration || navigator.onLine === false) return
+  const rotated = await rotateRefreshToken(refresh)
+  if (typeof rotated === 'string') throw new ApiError(0, 'تعذّر تأكيد إنهاء الجلسة.', undefined, 'revocation_unknown')
+  await revoke(rotated.access_token)
 }
 
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   getBlob: (path: string) => request<Blob>('GET', path, undefined, { binary: true }),
-  post: <T>(path: string, body?: unknown, idempotent = true) =>
-    request<T>('POST', path, body, { idempotency: idempotent }),
-  put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
-  patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
+  post: <T>(path: string, body?: unknown, idempotent = false) =>
+    request<T>('POST', path, JSON.stringify(body), { key: idempotent ? crypto.randomUUID() : undefined }),
+  put: <T>(path: string, body?: unknown) => request<T>('PUT', path, JSON.stringify(body)),
+  patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, JSON.stringify(body)),
   del: <T>(path: string) => request<T>('DELETE', path),
 }

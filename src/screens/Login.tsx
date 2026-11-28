@@ -11,6 +11,7 @@ import { useFieldErrors } from '../hooks/useFieldErrors'
 import type { Role } from '../types'
 import Icon from '../components/Icon'
 import PhoneInput, { FieldError } from '../components/PhoneInput'
+import SessionRecovery from '../components/SessionRecovery'
 
 const ROLES: { role: Role; desc: string }[] = [
   { role: 'super_admin', desc: 'وصول كامل لكل الأقسام' },
@@ -109,8 +110,7 @@ export default function Login() {
     }, 'تعذّر إعادة الإرسال')
   }
 
-  // لا دخول جديد أثناء استعادة الجلسة: التجديد الجاري قد يستبدل توكنات الحساب الجديد
-  if (!ready) return <div className="auth-page" role="status">جارٍ استعادة الجلسة…</div>
+  if (!ready) return <SessionRecovery />
   if (role && !API_MOCK) return <Navigate to={`/${homeFor(role)}`} replace />
 
   return (

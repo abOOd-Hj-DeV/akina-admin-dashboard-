@@ -23,7 +23,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-const tokens = { message: 'ok', user: { role: 'super_admin', name: 'R' }, access_token: 'acc', refresh_token: 'ref' }
+const tokens = { message: 'ok', user: { id: 'staff-r', role: 'super_admin', name: 'R' }, access_token: 'acc', refresh_token: 'ref' }
 
 describe('مصادقة الإدارة', () => {
   it('رد 2FA لا يخزّن توكن', async () => {
@@ -74,7 +74,7 @@ describe('مصادقة الإدارة', () => {
   it('استعادة الجلسة عند التحميل: refresh ثم /auth/user', async () => {
     env.session.setItem('sakina-refresh', 'ref-old')
     reply({ ...tokens, access_token: 'acc2', refresh_token: 'ref2' })
-    reply({ user: { role: 'admin', name: 'A' } })
+    reply({ user: { id: 'staff-a', role: 'admin', name: 'A' } })
     const user = await restoreSessionApi()
     expect(user).toMatchObject({ role: 'admin' })
     expect(call(1).url).toContain('/api/v1/auth/user')
@@ -83,7 +83,7 @@ describe('مصادقة الإدارة', () => {
   it('استعادة متزامنة (StrictMode) ترسل refresh واحداً فقط', async () => {
     env.session.setItem('sakina-refresh', 'ref-old')
     reply({ ...tokens, access_token: 'acc2', refresh_token: 'ref2' })
-    reply({ user: { role: 'admin', name: 'A' } })
+    reply({ user: { id: 'staff-a', role: 'admin', name: 'A' } })
     const [a, b] = await Promise.all([restoreSessionApi(), restoreSessionApi()])
     expect(a).toEqual(b)
     expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/refresh'))).toHaveLength(1)
@@ -98,6 +98,37 @@ describe('مصادقة الإدارة', () => {
   it('بدون توكن تجديد لا تُستعاد الجلسة ولا يُستدعى الخادم', async () => {
     expect(await restoreSessionApi()).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+  it('retains credentials when opened offline and restores after reconnecting', async () => {
+    env.session.setItem('sakina-refresh', 'ref-old')
+    const connection = { onLine: false }
+    vi.stubGlobal('navigator', connection)
+    expect(await restoreSessionApi()).toEqual({ recovery: 'retry' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(tokenStore.getRefresh()).toBe('ref-old')
+    connection.onLine = true
+    reply(tokens)
+    reply({ user: tokens.user })
+    expect(await restoreSessionApi()).toEqual(tokens.user)
+  })
+  it.each([0, 503])('does not replay a refresh after an uncertain outcome (%s)', async (status) => {
+    env.session.setItem('sakina-refresh', 'ref-old')
+    if (status) reply({ message: 'unavailable' }, status)
+    else fetchMock.mockRejectedValueOnce(new TypeError('connection lost'))
+    expect(await restoreSessionApi()).toEqual({ recovery: 'sign_in' })
+    expect(tokenStore.getRefresh()).toBe('ref-old')
+    expect(await restoreSessionApi()).toEqual({ recovery: 'sign_in' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+  it('retries only the user check if the refresh already succeeded', async () => {
+    env.session.setItem('sakina-refresh', 'ref-old')
+    reply(tokens)
+    reply({ message: 'unavailable' }, 503)
+    expect(await restoreSessionApi()).toEqual({ recovery: 'retry' })
+    expect(tokenStore.getRefresh()).toBe('ref')
+    reply({ user: tokens.user })
+    expect(await restoreSessionApi()).toEqual(tokens.user)
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/refresh'))).toHaveLength(1)
   })
   it('التفعيل يرسل الرمز وتأكيد كلمة المرور', async () => {
     reply({ message: 'activated', user: {} })
@@ -154,5 +185,37 @@ describe('شاشات الحساب', () => {
     await expect(logoutApi()).rejects.toBeTruthy()
     expect(tokenStore.get()).toBeNull()
     expect(tokenStore.getRefresh()).toBeNull()
+  })
+  it('revokes the session after an expired access token without restoring local credentials', async () => {
+    tokenStore.set('expired-access', 'current-refresh')
+    reply({}, 401)
+    reply({ access_token: 'rotated-access', refresh_token: 'rotated-refresh' })
+    reply({})
+    const pending = logoutApi()
+    expect(tokenStore.get()).toBeNull()
+    expect(tokenStore.getRefresh()).toBeNull()
+    await pending
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(call(1).url).toContain('/api/v1/auth/refresh')
+    expect(call(1).body).toEqual({ refresh_token: 'current-refresh' })
+    expect(call(2).url).toContain('/api/v1/auth/logout')
+    expect(call(2).init.headers).toMatchObject({ Authorization: 'Bearer rotated-access' })
+    expect(tokenStore.get()).toBeNull()
+    expect(tokenStore.getRefresh()).toBeNull()
+  })
+  it.each([200, 401, 500])('رد خروج قديم (%s) لا يمس الجلسة الجديدة', async (status) => {
+    let finish!: (response: Response) => void
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { finish = resolve }))
+    tokenStore.set('old-access', 'old-refresh')
+    const pending = logoutApi().catch(() => undefined)
+    expect(tokenStore.get()).toBeNull()
+    expect((call().init.headers as Record<string, string>).Authorization).toBe('Bearer old-access')
+    reply(tokens)
+    await loginApi('+963990000000', 'secret123')
+    finish(json({ message: 'done' }, status))
+    await pending
+    expect(tokenStore.get()).toBe('acc')
+    expect(tokenStore.getRefresh()).toBe('ref')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

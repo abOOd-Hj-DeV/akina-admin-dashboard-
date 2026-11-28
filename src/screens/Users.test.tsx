@@ -26,6 +26,8 @@ const pending = {
   role: 'support_agent',
   is_active: true,
   pending_invitation: true,
+  allowed_staff_actions: ['resend_invite', 'cancel_invite'],
+  invitation: { retry_after: 0, resend_available_at: '2026-04-01T00:01:00Z', code_usable: true },
   created_at: '2026-04-01',
 }
 const accepted = { ...pending, pending_invitation: false }
@@ -59,6 +61,86 @@ it('refreshes pending invitations automatically', async () => {
   expect(view.container.textContent).not.toContain('دعوة معلّقة')
   expect(adminApi.users).toHaveBeenCalledTimes(2)
   await view.unmount()
+})
+
+it('rechecks the row at the advertised boundary and never resends an invitation accepted elsewhere', async () => {
+  adminApi.users.mockReset()
+    .mockResolvedValueOnce({ data: [{ ...pending, allowed_staff_actions: ['cancel_invite'], invitation: { ...pending.invitation, retry_after: 1 } }], last_page: 1 })
+    .mockResolvedValueOnce({ data: [{ ...accepted, allowed_staff_actions: ['deactivate'], invitation: null }], last_page: 1 })
+  adminApi.resendInvitation.mockClear()
+  const { default: Users } = await import('./Users')
+  const view = mount()
+  try {
+    await view.render(<MemoryRouter><Users /></MemoryRouter>)
+    expect(view.container.textContent).toContain('يمكن إعادة الدعوة بعد')
+    expect([...view.container.querySelectorAll('button')].some((button) => button.textContent === 'إعادة الدعوة')).toBe(false)
+    await act(async () => { await vi.advanceTimersByTimeAsync(999) })
+    expect(adminApi.users).toHaveBeenCalledTimes(1)
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+    expect(adminApi.users).toHaveBeenCalledTimes(2)
+    expect(view.container.textContent).not.toContain('يمكن إعادة الدعوة بعد')
+    expect(view.container.textContent).toContain('تعطيل')
+    expect(adminApi.resendInvitation).not.toHaveBeenCalled()
+  } finally {
+    await view.unmount()
+  }
+})
+
+it('persists simulated cancellation and resend across demo list reloads without transport', async () => {
+  vi.stubEnv('VITE_API_MOCK', 'true')
+  const fetch = vi.fn()
+  vi.stubGlobal('fetch', fetch)
+  vi.stubGlobal('confirm', vi.fn(() => true))
+  const [{ default: Users }, { changeStaff, inviteUser, listStaff }] = await Promise.all([import('./Users'), import('../services/data')])
+  await inviteUser({ name: 'دعوة جديدة تجريبية', email: 'demo@example.test', whatsapp_number: '+963900000099', role: 'support_agent' })
+  const view = mount()
+  const row = (name: string) => [...view.container.querySelectorAll('tbody tr')].find((item) => item.firstElementChild?.textContent === name)
+  const action = (name: string, label: string) =>
+    [...(row(name)?.querySelectorAll('button') ?? [])].find((button) => button.textContent === label)
+  try {
+    await view.render(<MemoryRouter><Users /></MemoryRouter>)
+    expect(row('دعوة جديدة تجريبية')?.textContent).toContain('دعوة معلّقة')
+    expect(action('دعوة جديدة تجريبية', 'إعادة الدعوة')).toBeUndefined()
+    await act(async () => action('موظف الدعم', 'إعادة الدعوة')!.click())
+    expect(row('موظف الدعم')?.textContent).toContain('يمكن إعادة الدعوة بعد')
+    expect(action('موظف الدعم', 'إعادة الدعوة')).toBeUndefined()
+    const beforeRefusal = await listStaff(1, 'admin', null)
+    await expect(changeStaff('U-04', 'resend_invite', 'admin', null)).rejects.toMatchObject({ status: 409 })
+    expect(await listStaff(1, 'admin', null)).toEqual(beforeRefusal)
+    await act(async () => action('دعوة جديدة تجريبية', 'إلغاء الدعوة')!.click())
+    expect(row('دعوة جديدة تجريبية')).toBeUndefined()
+    await act(async () => vi.advanceTimersByTimeAsync(60_000))
+    expect(row('دعوة جديدة تجريبية')).toBeUndefined()
+    expect(action('موظف الدعم', 'إعادة الدعوة')).toBeDefined()
+    expect(fetch).not.toHaveBeenCalled()
+  } finally {
+    vi.restoreAllMocks()
+    await view.unmount()
+  }
+})
+
+it('renders only server-authorized staff status actions and reloads a stale row after refusal', async () => {
+  auth.role = 'super_admin'
+  const own = { ...accepted, id: 'self', name: 'own row', role: 'super_admin', allowed_staff_actions: [] }
+  const target = { ...accepted, id: 'target', name: 'another row', allowed_staff_actions: ['deactivate'] }
+  const legacy = { ...accepted, id: 'old', name: 'unverified capability' }
+  adminApi.users.mockReset().mockResolvedValueOnce({ data: [own, target, legacy], last_page: 1 })
+    .mockResolvedValueOnce({ data: [own, { ...target, allowed_staff_actions: [] }, legacy], last_page: 1 })
+  adminApi.setUserActive.mockReset().mockRejectedValueOnce(new Error('refused'))
+  const { default: Users } = await import('./Users')
+  const view = mount()
+  try {
+    await view.render(<MemoryRouter><Users /></MemoryRouter>)
+    const [selfRow, targetRow, legacyRow] = view.container.querySelectorAll('tbody tr')
+    expect(selfRow.querySelector('button')).toBeNull()
+    expect(legacyRow.querySelector('button')).toBeNull()
+    await act(async () => targetRow.querySelector('button')!.click())
+    expect(adminApi.setUserActive).toHaveBeenCalledWith('target', false)
+    expect(view.container.textContent).toContain('refused')
+    expect(view.container.querySelectorAll('tbody button')).toHaveLength(0)
+  } finally {
+    await view.unmount()
+  }
 })
 
 it('routes an admin from a therapist user row to that therapist’s read-only lifecycle details', async () => {

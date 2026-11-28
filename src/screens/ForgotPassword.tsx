@@ -45,10 +45,10 @@ export default function ForgotPassword() {
   }
 
   const sendCode = (num: string) => run(async () => {
-    const res = await forgotPasswordApi(num)
+    await forgotPasswordApi(num)
     setE164(num)
     setStep('reset')
-    setInfo(res.message || 'إذا كان الرقم مسجلاً، أرسلنا رمز الاستعادة عبر واتساب.')
+    setInfo('إذا كان الرقم مؤهلاً، قد يصلك رمز الاستعادة على واتساب.')
   }, 'تعذّر إرسال الرمز')
 
   const requestCode = () => {
@@ -82,7 +82,7 @@ export default function ForgotPassword() {
     <div className="auth-page">
       <div className="relative w-full max-w-lg rounded-3xl border border-white/70 bg-white/80 p-8 shadow-xl backdrop-blur-md">
         <h1 className="text-[24px] font-bold text-[#0a0a0a]">استعادة كلمة المرور</h1>
-        <p className="mt-1 text-[12px] text-[#657381]">نرسل رمزاً من 6 أرقام إلى واتساب الرقم المسجّل، ثم تختار كلمة مرور جديدة.</p>
+        <p className="mt-1 text-[12px] text-[#657381]">اطلب رمز استعادة من 6 أرقام عبر واتساب، ثم اختر كلمة مرور جديدة إذا وصلك الرمز.</p>
         {step === 'done' && (
           <div className="mt-6 space-y-4">
             <p className="rounded-xl bg-[#c7e4e7]/50 px-4 py-3 text-[14px] font-medium text-[#135e66]">تم تغيير كلمة المرور. سجّل الدخول بكلمة المرور الجديدة.</p>

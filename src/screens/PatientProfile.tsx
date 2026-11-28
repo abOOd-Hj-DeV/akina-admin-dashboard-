@@ -2,12 +2,13 @@ import { useSearchParams } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { access } from '../auth/permissions'
-import { getPatient, listRedFlags, listTherapistNames } from '../services/data'
+import { getPatient, listRedFlags } from '../services/data'
 import { useAsync } from '../hooks/useAsync'
 import { API_MOCK } from '../api/client'
 import { Badge, Btn, Card, DataState, PageHeader, ProgressBar } from '../components/ui'
 import Icon from '../components/Icon'
 import { formatAdminDate } from '../lib/format-date'
+import { redFlagPriority } from '../lib/red-flag-label'
 
 const TABS = ['بيانات الحساب', 'المعالج والبرنامج', 'التقدم العلاجي', 'سجل المزاج', 'الجلسات', 'التحذيرات', 'المستندات']
 /** تبويبات سريرية — مخفية عن Admin */
@@ -41,12 +42,6 @@ export default function PatientProfile() {
     { interval: 15_000 },
   )
   const redFlags = flagData ?? []
-  const canListTherapists = role === 'admin' || role === 'super_admin'
-  const { data: therapistData } = useAsync(
-    canListTherapists ? listTherapistNames : () => Promise.resolve([]),
-    [role, canListTherapists],
-  )
-  const therapists = therapistData ?? []
   const a = role ? access(role, 'patient-profile') : { level: 'denied' as const }
   const anon = a.mask === 'no-identity'
   const limited = a.mask === 'no-clinical'
@@ -118,7 +113,7 @@ export default function PatientProfile() {
           )}
           {tabs[tab] === 'المعالج والبرنامج' && (
             <div className="grid grid-cols-2 gap-4 text-[14px] md:grid-cols-4">
-              <Field k="المعالج الحالي" v={therapists.find((t) => t.id === p.therapistId)?.name ?? p.therapistId} />
+              <Field k="المعالج الحالي" v={p.therapistName === null ? 'لا يوجد معالج معيّن' : p.therapistName ?? 'اسم المعالج غير متاح'} />
               {API_MOCK && <Field k="البرنامج" v="برنامج إدارة القلق العام" />}
               {API_MOCK && <Field k="الوحدة الحالية" v="الوحدة 3 — إدارة الأفكار" />}
               {API_MOCK && <Field k="الجلسة القادمة" v={formatAdminDate("2025-11-23")} />}
@@ -160,15 +155,18 @@ export default function PatientProfile() {
           {tabs[tab] === 'التحذيرات' && (
             <div className="space-y-2">
               {canListRedFlags && <DataState loading={flagsLoading} error={flagsError} hasData={flagData !== undefined} empty={flagData !== undefined && flags.length === 0} emptyMessage="لا تحذيرات مسجلة." onRetry={reloadFlags} />}
-              {flags.map((f) => (
+              {flags.map((f) => {
+                const priority = redFlagPriority(f.priority)
+                return (
                 <div key={f.id} className="rounded-xl border border-red-100 bg-red-50/50 px-4 py-3">
                   <div className="flex items-center gap-2 font-bold text-[#0a0a0a]">
-                    <Icon name="flag" size={14} className="inline" /> {f.id} <Badge tone="red">{f.level}</Badge>
+                    <Icon name="flag" size={14} className="inline" /> {f.id} <Badge tone={priority.tone}>{priority.label}</Badge>
                   </div>
                   <p className="mt-1 text-[14px] text-[#657381]">{f.reason}</p>
                   <p className="mt-1 text-[12px] text-[#657381]">تم الرصد: {formatAdminDate(f.detectedAt)}</p>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
           {tabs[tab] === 'المستندات' && (

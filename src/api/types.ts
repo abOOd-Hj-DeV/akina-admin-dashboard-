@@ -88,13 +88,21 @@ export interface ApiPayment {
   created_at: string
 }
 
+export interface ApiEmergencyResources {
+  ambulance?: string | null
+  police?: string | null
+  hotlines?: Array<{ label: string; phones: string[] }> | null
+  notice?: string | null
+}
+
 export interface ApiRedFlag {
   id: string
   patient_id: string
   patient_name?: string | null
   patient_whatsapp?: string | null
   type: string
-  priority: 'high' | 'medium' | 'low'
+  source?: string | null
+  priority: string
   status: 'open' | 'assigned' | 'resolved' | string
   description: string
   action_taken: string | null
@@ -104,6 +112,7 @@ export interface ApiRedFlag {
   assessment_id: string | null
   assessment_score?: number | null
   on_hold: boolean
+  allowed_decisions?: Array<'reactivate' | 'keep_hold' | 'close'>
   hold_since: string | null
   reactivation_requested_at: string | null
   previous_flag_id: string | null
@@ -115,7 +124,7 @@ export interface ApiRedFlagStats {
   total: number; open: number; resolved: number; high_priority: number; by_type: Record<string, number>
 }
 
-export type ApiRedFlagCounts = Record<'open' | 'resolved', Record<ApiRedFlag['priority'], number>>
+export type ApiRedFlagCounts = Record<'open' | 'resolved', Record<'high' | 'medium' | 'low', number>>
 
 export type TherapistApproval = 'pending' | 'approved' | 'rejected'
 export type TherapistLifecycle = 'invited' | 'awaiting_profile' | 'pending_review' | 'needs_changes' | 'approved' | 'update_pending' | 'suspended'
@@ -276,6 +285,8 @@ export interface ApiProgram {
   updated_at?: string
 }
 
+export type StaffAction = 'deactivate' | 'reactivate' | 'resend_invite' | 'cancel_invite'
+
 export interface ApiAdminUser {
   id: string
   name: string
@@ -286,6 +297,8 @@ export interface ApiAdminUser {
   is_active: boolean
   activated?: boolean
   pending_invitation?: boolean
+  allowed_staff_actions?: StaffAction[]
+  invitation?: { retry_after: number; resend_available_at: string; code_usable: boolean } | null
   last_login?: string | null
   created_at: string
 }

@@ -54,15 +54,16 @@ export interface RedFlag {
   patientName: string
   patientWhatsapp?: string | null
   type: string
-  priority: 'high' | 'medium' | 'low'
+  source?: string | null
+  priority: string
   status: 'open' | 'assigned' | 'resolved'
   assignedTo?: string | null
   assigneeName: string | null
   therapistName: string | null
   reason: string
-  level: 'حرج' | 'عالي' | 'متوسط' | 'تم الحل'
   assessmentScore: number | null
   onHold: boolean
+  allowedDecisions: Array<'reactivate' | 'keep_hold' | 'close'>
   holdSince: string | null
   reactivationRequestedAt: string | null
   actionTaken: string | null

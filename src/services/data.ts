@@ -8,14 +8,15 @@
 import { API_MOCK, api, ApiError } from '../api/client'
 import { adminApi } from '../api/admin'
 import type {
-  ApiAdminPatient, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAuditEntry, ApiDocument,
+  ApiAdminPatient, ApiAdminTherapist, ApiAdminTherapistDetail, ApiAuditEntry, ApiDocument, ApiEmergencyResources,
   ApiFaq, ApiOverview, ApiPayment, ApiProgram, ApiRedFlag, ApiSupportTicket, ApiWithdrawal,
-  CreateUserBody, TherapistActionCode,
+  CreateUserBody, StaffAction, TherapistActionCode,
 } from '../api/types'
 import type {
   AuditEntry, DocRequest, Patient, Payment, Program, RedFlag, Role, Ticket,
 } from '../types'
 import * as mock from '../data/mock'
+import { mockStaff } from '../data/mock-staff'
 import { THERAPIST_OPTIONS } from '../data/therapistOptions'
 import { APPLICATION_REF_TAKEN } from '../lib/invite'
 
@@ -49,22 +50,22 @@ const mapPayment = (p: ApiPayment): Payment => ({
   status: PAYMENT_STATUS[p.status] ?? 'قيد المراجعة',
 })
 
-const FLAG_LEVEL = { high: 'حرج', medium: 'عالي', low: 'متوسط' } as const
 export const mapFlag = (f: ApiRedFlag): RedFlag => ({
   id: f.id,
   patientId: f.patient_id,
   patientName: f.patient_name || 'مريض',
   patientWhatsapp: f.patient_whatsapp ?? null,
   type: f.type,
+  source: f.source,
   priority: f.priority,
   status: f.status === 'resolved' ? 'resolved' : f.status === 'assigned' ? 'assigned' : 'open',
   assignedTo: f.assigned_to,
   assigneeName: f.assignee_name ?? null,
   therapistName: f.therapist_name ?? null,
   reason: f.description,
-  level: f.status === 'resolved' ? 'تم الحل' : (FLAG_LEVEL[f.priority] ?? 'متوسط'),
   assessmentScore: f.assessment_score ?? null,
   onHold: f.on_hold,
+  allowedDecisions: f.allowed_decisions ?? [],
   holdSince: f.hold_since,
   reactivationRequestedAt: f.reactivation_requested_at,
   actionTaken: f.action_taken,
@@ -254,7 +255,7 @@ export const listRedFlags = () =>
   API_MOCK ? wait(mock.redFlags) : fetchPages(page => adminApi.redFlags({ page })).then(rows => rows.map(mapFlag))
 
 export const countOpenRedFlags = () =>
-  API_MOCK ? wait(mock.redFlags.filter(f => f.level !== 'تم الحل').length)
+  API_MOCK ? wait(mock.redFlags.filter(f => f.status !== 'resolved').length)
     : adminApi.redFlagCounts().then(r => Object.values(r.data.open).reduce((sum, count) => sum + count, 0))
 
 export const listDocRequests = () =>
@@ -263,6 +264,9 @@ export const listDocRequests = () =>
 // مسار الدعم يرجع paginator لارافيل خام داخل data (الصفوف في data.data)
 export const listTickets = () =>
   API_MOCK ? wait(mock.tickets) : fetchTicketPages().then(rows => rows.map(mapTicket))
+
+export const listEmergencyResources = (): Promise<ApiEmergencyResources> =>
+  API_MOCK ? wait({}) : adminApi.emergencyResources().then(response => response.data)
 
 // الباك اند لا يملك حالة نشر للبرامج؛ كل برنامج مُعاد من /admin/programs منشور فعلياً
 const mapProgram = (p: ApiProgram): Program => ({
@@ -289,10 +293,17 @@ export const listFaqs = (): Promise<ApiFaq[]> =>
     { id: 'F-2', question: 'متى تُفعّل الباقة؟', answer: 'بعد مراجعة الإيصال خلال 24 ساعة.' },
   ]) : fetchPages(page => adminApi.faqs({ page }))
 
-export const getPatient = (id?: string | null): Promise<Patient | null> => {
+export const getPatient = (id?: string | null): Promise<(Patient & { therapistName?: string | null }) | null> => {
   if (!id) return wait(null)
-  if (API_MOCK) return wait(mock.patients.find(patient => patient.id === id) ?? null)
-  return adminApi.patient(id).then(response => mapPatient(response.data))
+  if (API_MOCK) {
+    const patient = mock.patients.find(patient => patient.id === id)
+    if (!patient) return wait(null)
+    return wait({ ...patient, therapistName: mock.therapists.find(therapist => therapist.id === patient.therapistId)?.full_name })
+  }
+  return adminApi.patient(id).then(({ data }) => ({
+    ...mapPatient(data),
+    therapistName: data.therapist === null ? null : data.therapist?.full_name?.trim() || undefined,
+  }))
 }
 
 export interface FeedItem { text: string; by: string; at: string; dot: string }
@@ -377,7 +388,17 @@ export async function inviteUser(body: CreateUserBody) {
       id: crypto.randomUUID(), full_name: body.name, approval_status: null, created_at: new Date().toISOString(),
       whatsapp_number: body.whatsapp_number, application_ref, lifecycle_state: 'invited', is_active: false, availability: [],
     }))
-  }
+  } else mockStaff.invite(body)
+}
+
+export const listStaff = (page: number, role: Role | null, userId: string | null) =>
+  API_MOCK ? mockStaff.list(role, userId, page) : adminApi.users({ page })
+
+export async function changeStaff(id: string, action: StaffAction, role: Role | null, userId: string | null): Promise<void> {
+  if (API_MOCK) return mockStaff.change(id, action, role, userId)
+  if (action === 'resend_invite') await adminApi.resendInvitation(id)
+  else if (action === 'cancel_invite') await adminApi.cancelInvitation(id)
+  else await adminApi.setUserActive(id, action === 'reactivate')
 }
 
 export async function requestDocument(userId: string, type: keyof typeof DOCUMENT_TYPES, reason?: string) {
